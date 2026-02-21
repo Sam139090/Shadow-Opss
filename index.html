@@ -1,1369 +1,1298 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Shadow Ops</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/_sdk/element_sdk.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spy Party</title>
   <style>
-    body {
-      box-sizing: border-box;
-    }
-    
-    @font-face {
-      font-family: 'Vazirmatn';
-      src: url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-Regular.woff2') format('woff2');
-      font-weight: 400;
-    }
-    
-    * {
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-    
+    /*
+      Spy Party Game
+      ----------------
+      This single‑file web application implements a browser based party game inspired
+      by the classic “Spyfall/Spy Party” genre. The design language emulates
+      Apple’s Liquid Glass aesthetic using modern CSS features such as
+      backdrop-filter, blur, saturation and dynamic shadows. Everything is kept
+      self‑contained: no external libraries, fonts or images. All interactive
+      components are pure HTML/CSS/JS.
+
+      Features implemented include:
+      • Glassmorphic theme with configurable primary/secondary colours
+      • Responsive layout for desktop and mobile
+      • Multilingual support (English and Persian) with dynamic RTL/LTR switch
+      • Persistent settings stored in localStorage
+      • Setup page allowing players/rounds/difficulty selection
+      • Cryptographically secure word selection with memory of used words
+      • Role reveal with 3D card flip animation
+      • Countdown timer with progress ring and warning cues
+      • Simple voting mechanic to decide winners
+
+      Given the complexity of a full production game, some details (such as
+      thousands of words per difficulty) are represented by small sample lists.
+      Expanding the word bank is a matter of adding more strings to the arrays
+      defined in `wordBank` below. The architecture is modular and organised
+      around state‑driven view rendering.
+    */
+
+    /* Root variables for colours and typography */
     :root {
-      --primary: #B3E5FC;
-      --secondary: #FFFFFF;
-      --accent: #00E5FF;
-      --glass-bg: rgba(255, 255, 255, 0.1);
-      --glass-border: rgba(255, 255, 255, 0.2);
+      --primary: #d8e3e7;
+      --secondary: #8ec5fc;
+      --text-color: #0a0a0a;
+      --bg-blur: 40px;
+      --card-blur: 25px;
+      --float-blur: 15px;
+      --shadow-color: rgba(0, 0, 0, 0.15);
+      --shadow-strong: rgba(0,0,0,0.22);
+      --glass-border: rgba(255,255,255,0.35);
+      --glass-fill: rgba(255,255,255,0.22);
+      --glass-fill-2: rgba(255,255,255,0.14);
+      --ui-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+      --spring-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --fade-ease: ease-in-out;
+      --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     }
-    
-    .font-persian {
-      font-family: 'Vazirmatn', 'Tahoma', sans-serif;
-    }
-    
-    .font-english {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
-    }
-    
-    .glass {
-      background: var(--glass-bg);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid var(--glass-border);
-      box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.1);
-    }
-    
-    .glass-card {
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.15) 0%,
-        rgba(255, 255, 255, 0.05) 100%
-      );
-      backdrop-filter: blur(30px);
-      -webkit-backdrop-filter: blur(30px);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 
-        0 20px 60px rgba(0, 0, 0, 0.4),
-        inset 0 2px 0 rgba(255, 255, 255, 0.3),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-    }
-    
-    .glass-button {
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.2) 0%,
-        rgba(255, 255, 255, 0.1) 100%
-      );
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 
-        0 8px 24px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    
-    .glass-button:hover {
-      transform: translateY(-2px) scale(1.02);
-      box-shadow: 
-        0 12px 32px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.5),
-        0 0 20px var(--primary);
-    }
-    
-    .glass-button:active {
-      transform: translateY(1px) scale(0.98);
-    }
-    
-    .glow-primary {
-      box-shadow: 0 0 40px var(--primary), 0 0 80px rgba(179, 229, 252, 0.3);
-    }
-    
-    .glow-accent {
-      box-shadow: 0 0 30px var(--accent), 0 0 60px rgba(0, 229, 255, 0.2);
-    }
-    
-    .glow-danger {
-      box-shadow: 0 0 40px #FF1744, 0 0 80px rgba(255, 23, 68, 0.4);
-    }
-    
-    .glow-success {
-      box-shadow: 0 0 40px #00E676, 0 0 80px rgba(0, 230, 118, 0.4);
-    }
-    
-    .breathing {
-      animation: breathe 3s ease-in-out infinite;
-    }
-    
-    @keyframes breathe {
-      0%, 100% { opacity: 0.7; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.02); }
-    }
-    
-    .float {
-      animation: float 4s ease-in-out infinite;
-    }
-    
-    @keyframes float {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-10px); }
-    }
-    
-    .shake {
-      animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-    }
-    
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-      20%, 40%, 60%, 80% { transform: translateX(4px); }
-    }
-    
-    .pulse-glow {
-      animation: pulseGlow 2s ease-in-out infinite;
-    }
-    
-    @keyframes pulseGlow {
-      0%, 100% { filter: brightness(1); }
-      50% { filter: brightness(1.3); }
-    }
-    
-    .slide-up {
-      animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-    
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(40px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .slide-down {
-      animation: slideDown 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-    
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-40px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .scale-in {
-      animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-    
-    @keyframes scaleIn {
-      from { opacity: 0; transform: scale(0.8); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    
-    .fade-in {
-      animation: fadeIn 0.4s ease-out forwards;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    
-    .fade-out {
-      animation: fadeOut 0.3s ease-out forwards;
-    }
-    
-    @keyframes fadeOut {
-      from { opacity: 1; }
-      to { opacity: 0; }
-    }
-    
-    .timer-ring {
-      stroke-dasharray: 440;
-      stroke-dashoffset: 0;
-      transform-origin: center;
-      transform: rotate(-90deg);
-    }
-    
-    .particle {
-      position: absolute;
-      width: 4px;
-      height: 4px;
-      background: var(--primary);
-      border-radius: 50%;
-      pointer-events: none;
-      animation: particleFloat 8s ease-in-out infinite;
-    }
-    
-    @keyframes particleFloat {
-      0%, 100% { 
-        transform: translateY(0) translateX(0) scale(1);
-        opacity: 0.3;
-      }
-      25% { 
-        transform: translateY(-30px) translateX(10px) scale(1.2);
-        opacity: 0.6;
-      }
-      50% { 
-        transform: translateY(-60px) translateX(-10px) scale(0.8);
-        opacity: 0.4;
-      }
-      75% { 
-        transform: translateY(-30px) translateX(20px) scale(1.1);
-        opacity: 0.5;
-      }
-    }
-    
-    .bg-gradient {
-      background: linear-gradient(
-        135deg,
-        #0a0a1a 0%,
-        #1a1a3a 25%,
-        #0f0f2f 50%,
-        #1a1a3a 75%,
-        #0a0a1a 100%
-      );
-    }
-    
-    .spy-reveal {
-      animation: spyReveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-    
-    @keyframes spyReveal {
-      0% { 
-        opacity: 0; 
-        transform: scale(0.5) rotateY(90deg);
-        filter: blur(10px);
-      }
-      50% {
-        filter: blur(5px);
-      }
-      100% { 
-        opacity: 1; 
-        transform: scale(1) rotateY(0deg);
-        filter: blur(0);
-      }
-    }
-    
-    .word-reveal {
-      animation: wordReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-    
-    @keyframes wordReveal {
-      0% { 
-        opacity: 0; 
-        transform: translateY(20px) scale(0.9);
-        filter: blur(8px);
-      }
-      100% { 
-        opacity: 1; 
-        transform: translateY(0) scale(1);
-        filter: blur(0);
-      }
-    }
-    
-    .ripple {
-      position: absolute;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.4);
-      transform: scale(0);
-      animation: rippleEffect 0.6s ease-out;
-      pointer-events: none;
-    }
-    
-    @keyframes rippleEffect {
-      to {
-        transform: scale(4);
-        opacity: 0;
-      }
-    }
-    
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 8px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      outline: none;
-    }
-    
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 24px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 0 20px var(--primary);
-      transition: all 0.2s ease;
-    }
-    
-    input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 0 30px var(--primary);
-    }
-    
-    input[type="color"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 60px;
-      height: 60px;
-      border: none;
-      border-radius: 50%;
-      cursor: pointer;
-      background: transparent;
-    }
-    
-    input[type="color"]::-webkit-color-swatch-wrapper {
+
+    html, body {
+      margin: 0;
       padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--primary);
+      font-family: var(--font-family);
+      color: var(--text-color);
     }
-    
-    input[type="color"]::-webkit-color-swatch {
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      box-shadow: 0 0 20px currentColor;
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
     }
-    
-    .stagger-1 { animation-delay: 0.1s; }
-    .stagger-2 { animation-delay: 0.2s; }
-    .stagger-3 { animation-delay: 0.3s; }
-    .stagger-4 { animation-delay: 0.4s; }
-    .stagger-5 { animation-delay: 0.5s; }
-    
-    .screen {
+
+    /* Background blur layer */
+    #bg {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(1200px 800px at 20% 20%, color-mix(in srgb, var(--secondary) 50%, white 50%) 0%, transparent 60%),
+        radial-gradient(900px 700px at 80% 30%, color-mix(in srgb, var(--primary) 55%, white 45%) 0%, transparent 55%),
+        radial-gradient(900px 900px at 50% 90%, color-mix(in srgb, var(--secondary) 35%, white 65%) 0%, transparent 60%),
+        linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0.08));
+      backdrop-filter: blur(var(--bg-blur)) saturate(180%);
+      z-index: -3;
+    }
+
+    /* Animated floating glass blobs (transform-only) */
+    .blob {
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      opacity: 0.55;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0.1) 55%, transparent 65%);
+      mix-blend-mode: overlay;
+      transform: translate3d(0,0,0);
+      will-change: transform;
+      pointer-events: none;
+      z-index: -2;
+      animation: floaty 10s var(--fade-ease) infinite alternate;
+    }
+    .blob.b2 { width: 520px; height: 520px; opacity: 0.42; animation-duration: 13s; }
+    .blob.b3 { width: 360px; height: 360px; opacity: 0.48; animation-duration: 11s; }
+    @keyframes floaty {
+      from { transform: translate3d(-10px, -8px, 0) scale(1); }
+      to   { transform: translate3d(12px, 10px, 0) scale(1.03); }
+    }
+
+    /* Container for pages */
+    #app {
+      width: 100%;
+      height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
-      opacity: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Common glass card */
+    .glass {
+      background: linear-gradient(180deg, var(--glass-fill), var(--glass-fill-2));
+      box-shadow:
+        0 22px 45px rgba(0,0,0,0.12),
+        0 4px 16px rgba(0,0,0,0.10);
+      backdrop-filter: blur(var(--card-blur)) saturate(180%);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .glass::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      background:
+        radial-gradient(600px 180px at 20% 10%, rgba(255,255,255,0.40), transparent 60%),
+        radial-gradient(500px 240px at 80% 0%, rgba(255,255,255,0.25), transparent 65%);
       pointer-events: none;
-      transition: opacity 0.4s ease;
+      mix-blend-mode: screen;
     }
-    
-    .screen.active {
+
+    .hidden {
+      display: none;
+    }
+
+    /* Button styling */
+    button {
+      cursor: pointer;
+      border: none;
+      outline: none;
+      padding: 12px 24px;
+      margin: 8px;
+      font-size: 1rem;
+      border-radius: 12px;
+      position: relative;
+      background: linear-gradient(145deg,
+        color-mix(in srgb, var(--primary) 70%, white 30%),
+        color-mix(in srgb, var(--secondary) 55%, white 45%));
+      color: rgba(0,0,0,0.9);
+      box-shadow: 0 18px 30px rgba(0,0,0,0.14);
+      transition: transform 180ms var(--ui-ease), filter 250ms var(--fade-ease), box-shadow 250ms var(--fade-ease);
+      will-change: transform;
+    }
+
+    button:hover { transform: scale(1.05); filter: saturate(1.06); }
+    button:active { transform: scale(0.96); }
+
+    button::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(220px 80px at 20% 15%, rgba(255,255,255,0.55), transparent 60%);
+      opacity: 0.55;
+      pointer-events: none;
+      transition: opacity 250ms var(--fade-ease);
+    }
+    button:hover::after { opacity: 0.75; }
+
+    /* Icon button (gear) */
+    .icon-btn {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0.16));
+      border: 1px solid rgba(255,255,255,0.35);
+      box-shadow: 0 20px 35px rgba(0,0,0,0.14);
+      backdrop-filter: blur(var(--float-blur)) saturate(180%);
+      z-index: 50;
+    }
+    .icon-btn svg {
+      width: 20px;
+      height: 20px;
+      opacity: 0.9;
+      transform: translateZ(0);
+      will-change: transform;
+      transition: transform 220ms var(--spring-ease);
+    }
+    .icon-btn:hover svg { transform: scale(1.08); }
+
+    /* Pages styles */
+    .page {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 20px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: transform 350ms var(--ui-ease), opacity 350ms var(--fade-ease);
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    .page.active {
       opacity: 1;
-      pointer-events: auto;
+      transform: translateX(0);
     }
-    
-    .voted {
-      border: 3px solid var(--accent) !important;
-      box-shadow: 0 0 30px var(--accent) !important;
+
+    /* Header style */
+    h1, h2, h3, p {
+      margin: 0.5em 0;
+      text-align: center;
+    }
+    h1 { font-size: clamp(2rem, 3vw, 2.6rem); letter-spacing: -0.02em; }
+    h2 { font-size: clamp(1.4rem, 2.4vw, 1.9rem); letter-spacing: -0.015em; }
+    p { opacity: 0.85; line-height: 1.5; max-width: 720px; }
+
+    /* Main menu */
+    #main-menu .buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Guide page style */
+    #guide-content {
+      max-width: 600px;
+      background: rgba(255,255,255,0.15);
+      padding: 20px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.3);
+      box-shadow: 0 4px 30px var(--shadow-color);
+      backdrop-filter: blur(var(--card-blur)) saturate(180%);
+      overflow-y: auto;
+      max-height: 70vh;
+    }
+
+    /* Settings list */
+    #settings-options {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 600px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+    .setting-row label {
+      flex: 1;
+    }
+    .setting-row input[type=color] {
+      width: 48px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      padding: 0;
+    }
+    .toggle {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(var(--card-blur));
+      cursor: pointer;
+      transition: background 250ms;
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 2px 4px var(--shadow-color);
+      transition: transform 250ms;
+    }
+    .toggle.on {
+      background: var(--secondary);
+    }
+    .toggle.on::after {
+      transform: translateX(22px);
+    }
+
+    /* Setup form styling */
+    #setup-form {
+      display: flex;
+      flex-direction: column;
+      max-width: 400px;
+      width: 100%;
+    }
+    #setup-form label { margin: 0; }
+    #setup-form .field {
+      margin-top: 14px;
+      padding: 14px 14px 12px;
+    }
+    #setup-form .field.glass { border-radius: 18px; }
+    .field-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .field-head .value {
+      font-variant-numeric: tabular-nums;
+      opacity: 0.85;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.28);
+      backdrop-filter: blur(var(--float-blur));
+    }
+
+    #setup-form select {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(var(--float-blur)) saturate(180%);
+      outline: none;
+    }
+
+    input[type=range] {
+      width: 100%;
+      margin-top: 12px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      height: 26px;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--secondary) 70%, white 30%),
+        rgba(255,255,255,0.25));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      margin-top: -5px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
+      border: 1px solid rgba(255,255,255,0.45);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.18);
+    }
+    input[type=range]::-moz-range-track {
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--secondary) 70%, white 30%),
+        rgba(255,255,255,0.25));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
+      border: 1px solid rgba(255,255,255,0.45);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.18);
+    }
+
+    /* Role reveal card */
+    #role-card {
+      width: 240px;
+      height: 320px;
+      perspective: 1200px;
+      margin: 20px auto;
+    }
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 16px;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.32),
+        rgba(255,255,255,0.14));
+      backdrop-filter: blur(var(--card-blur)) saturate(200%);
+      border: 1px solid rgba(255,255,255,0.35);
+      box-shadow:
+        0 26px 70px rgba(0,0,0,0.18),
+        inset 0 1px 0 rgba(255,255,255,0.25);
+      font-size: 1.3rem;
+      text-align: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+    .card-face::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      background:
+        radial-gradient(260px 160px at 25% 15%, rgba(255,255,255,0.45), transparent 60%),
+        radial-gradient(220px 180px at 80% 85%, rgba(255,255,255,0.22), transparent 60%),
+        linear-gradient(120deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+    .card-front { font-weight: 600; }
+    .card-back {
+      transform: rotateY(180deg);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .role-pill {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.30);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+      backdrop-filter: blur(var(--float-blur));
+      margin-bottom: 10px;
+      opacity: 0.92;
+    }
+    .spy-theme .card-back {
+      background:
+        radial-gradient(500px 220px at 50% 30%, rgba(255,0,80,0.18), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.12));
+    }
+    .citizen-theme .card-back {
+      background:
+        radial-gradient(500px 220px at 50% 30%, rgba(20,210,170,0.16), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.12));
+    }
+
+    /* Spy shake effect */
+    @keyframes spyshake {
+      0%   { transform: translate3d(0,0,0) rotate(0deg); }
+      15%  { transform: translate3d(-3px, 1px, 0) rotate(-1deg); }
+      30%  { transform: translate3d(4px, -1px, 0) rotate(1deg); }
+      45%  { transform: translate3d(-4px, 0px, 0) rotate(-1deg); }
+      60%  { transform: translate3d(3px, 1px, 0) rotate(1deg); }
+      75%  { transform: translate3d(-2px, -1px, 0) rotate(-0.5deg); }
+      100% { transform: translate3d(0,0,0) rotate(0deg); }
+    }
+    .spy-shake { animation: spyshake 600ms var(--spring-ease) 1; }
+
+    /* Timer styles */
+    #timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+    #timer-svg {
+      width: 180px;
+      height: 180px;
+      transform: rotate(-90deg);
+    }
+    #vote-button {
+      margin-top: 20px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 350ms ease-in-out, transform 350ms ease-in-out;
+    }
+    #vote-button.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Player voting list */
+    #vote-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 20px;
+      width: 100%;
+    }
+    .vote-card {
+      margin: 8px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(var(--float-blur)) saturate(180%);
+      background: rgba(255,255,255,0.2);
+      box-shadow: 0 4px 10px var(--shadow-color);
+      cursor: pointer;
+      transition: transform 200ms, background 200ms;
+    }
+    .vote-card.selected {
+      background: var(--secondary);
+      transform: scale(1.05);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      #setup-form {
+        max-width: 90vw;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
     }
   </style>
 </head>
-<body class="h-full bg-gradient font-english overflow-hidden">
-  <div id="app" class="h-full w-full relative overflow-auto">
-    <!-- Particles Container -->
-    <div id="particles" class="fixed inset-0 pointer-events-none overflow-hidden"></div>
-    
-    <!-- Language Selection Screen -->
-    <div id="languageScreen" class="screen active">
-      <div class="text-center mb-12 slide-down">
-        <h1 class="text-5xl md:text-7xl font-bold text-white mb-4 tracking-wider" style="text-shadow: 0 0 40px var(--primary);">
-          SHADOW OPS
-        </h1>
-        <p class="text-xl text-white/60">Select Your Language</p>
-      </div>
-      
-      <div class="flex flex-col md:flex-row gap-6 md:gap-8">
-        <button id="btnEnglish" class="glass-card rounded-3xl p-8 md:p-12 cursor-pointer scale-in stagger-1 hover:scale-105 transition-all duration-300 group" onclick="selectLanguage('en')">
-          <div class="text-6xl mb-4 group-hover:scale-110 transition-transform">🇬🇧</div>
-          <div class="text-2xl font-semibold text-white">English</div>
-        </button>
-        
-        <button id="btnPersian" class="glass-card rounded-3xl p-8 md:p-12 cursor-pointer scale-in stagger-2 hover:scale-105 transition-all duration-300 group" onclick="selectLanguage('fa')">
-          <div class="text-6xl mb-4 group-hover:scale-110 transition-transform">🇮🇷</div>
-          <div class="text-2xl font-semibold text-white font-persian">فارسی</div>
-        </button>
+<body>
+  <div id="bg"></div>
+  <div class="blob" style="left:-140px; top:-120px"></div>
+  <div class="blob b2" style="right:-200px; top:40px"></div>
+  <div class="blob b3" style="left:40px; bottom:-180px"></div>
+  <div id="app">
+    <!-- Global gear button (top-right) -->
+    <button id="gear-btn" class="icon-btn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="rgba(0,0,0,0.85)" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M19.4 15a8.8 8.8 0 0 0 .1-1l1.7-1.3-1.7-2.9-2.1.5a8.7 8.7 0 0 0-1.6-.9L15.5 7 12 5.7 8.5 7l-.3 2.4a8.7 8.7 0 0 0-1.6.9l-2.1-.5-1.7 2.9L4.5 14a8.8 8.8 0 0 0 .1 1l-1.8 1.4 1.7 2.9 2.2-.5c.5.4 1 .7 1.6.9l.3 2.4 3.5 1.3 3.5-1.3.3-2.4c.6-.2 1.1-.5 1.6-.9l2.2.5 1.7-2.9L19.4 15Z" stroke="rgba(0,0,0,0.75)" stroke-width="1.6" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <!-- Main Menu Page -->
+    <div id="main-menu" class="page active">
+      <h1 id="title">Spy Party</h1>
+      <div class="buttons">
+        <button id="continue-btn"></button>
+        <button id="guide-btn"></button>
+        <button id="settings-btn"></button>
       </div>
     </div>
-    
-    <!-- Setup Screen -->
-    <div id="setupScreen" class="screen">
-      <div class="w-full max-w-lg">
-        <h2 id="setupTitle" class="text-4xl md:text-5xl font-bold text-white text-center mb-10 slide-down" style="text-shadow: 0 0 30px var(--primary);">
-          Game Setup
-        </h2>
-        
-        <div class="glass-card rounded-3xl p-6 md:p-8 space-y-8 scale-in">
-          <!-- Player Count -->
-          <div class="slide-up stagger-1">
-            <div class="flex justify-between items-center mb-3">
-              <label id="labelPlayers" class="text-white/80 text-lg">Players</label>
-              <span id="playerCountDisplay" class="text-2xl font-bold text-white glow-accent px-4 py-1 rounded-full glass">4</span>
-            </div>
-            <input type="range" id="playerSlider" min="3" max="12" value="4" class="w-full" oninput="updatePlayerCount(this.value)">
-          </div>
-          
-          <!-- Game Duration -->
-          <div class="slide-up stagger-2">
-            <div class="flex justify-between items-center mb-3">
-              <label id="labelDuration" class="text-white/80 text-lg">Duration</label>
-              <span id="durationDisplay" class="text-2xl font-bold text-white glow-accent px-4 py-1 rounded-full glass">3:00</span>
-            </div>
-            <input type="range" id="durationSlider" min="60" max="600" value="180" step="30" class="w-full" oninput="updateDuration(this.value)">
-          </div>
-          
-          <!-- Colors -->
-          <div class="slide-up stagger-3">
-            <label id="labelColors" class="text-white/80 text-lg block mb-4">Theme Colors</label>
-            <div class="flex justify-center gap-8">
-              <div class="text-center">
-                <input type="color" id="primaryColor" value="#B3E5FC" class="mb-2" onchange="updatePrimaryColor(this.value)">
-                <p id="labelPrimary" class="text-white/60 text-sm">Primary</p>
-              </div>
-              <div class="text-center">
-                <input type="color" id="secondaryColor" value="#FFFFFF" class="mb-2" onchange="updateSecondaryColor(this.value)">
-                <p id="labelSecondary" class="text-white/60 text-sm">Secondary</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <button id="btnStart" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white slide-up stagger-4 glow-primary" onclick="startGame()">
-          ▶ Start Game
-        </button>
-        
-        <button id="btnBackLang" class="glass-button w-full mt-4 py-3 rounded-xl text-white/70 slide-up stagger-5" onclick="goToLanguage()">
-          ← Change Language
-        </button>
+
+    <!-- Guide Page -->
+    <div id="guide-page" class="page">
+      <h2 id="guide-title"></h2>
+      <div id="guide-content" class="glass">
+        <p id="guide-text"></p>
       </div>
+      <button id="back-from-guide"></button>
     </div>
-    
-    <!-- Role Reveal Screen -->
-    <div id="roleScreen" class="screen">
-      <div class="text-center w-full max-w-md">
-        <p id="playerLabel" class="text-2xl text-white/60 mb-4 slide-down">Player 1</p>
-        
-        <div id="roleCard" class="glass-card rounded-3xl p-8 md:p-12 cursor-pointer breathing" onclick="revealRole()">
-          <div id="roleContent">
-            <div id="tapPrompt" class="text-center">
-              <div class="text-6xl mb-6">👆</div>
-              <p id="tapText" class="text-xl text-white/80">Tap to see your role</p>
-            </div>
-            
-            <div id="roleRevealed" class="hidden">
-              <div id="roleIcon" class="text-8xl mb-6"></div>
-              <p id="roleText" class="text-3xl font-bold text-white mb-4"></p>
-              <p id="wordText" class="text-4xl font-bold text-white"></p>
-            </div>
-          </div>
+
+    <!-- Settings Page -->
+    <div id="settings-page" class="page">
+      <h2 id="settings-title"></h2>
+      <div id="settings-options">
+        <div class="setting-row">
+          <label id="lang-label" for="language-select"></label>
+          <select id="language-select">
+            <option value="en">English</option>
+            <option value="fa">فارسی</option>
+          </select>
         </div>
-        
-        <button id="btnConfirm" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white hidden glow-primary" onclick="confirmRole()">
-          Confirm & Pass
-        </button>
+        <div class="setting-row">
+          <label id="primary-label" for="primary-color"></label>
+          <input id="primary-color" type="color" value="#d8e3e7" />
+        </div>
+        <div class="setting-row">
+          <label id="secondary-label" for="secondary-color"></label>
+          <input id="secondary-color" type="color" value="#8ec5fc" />
+        </div>
+        <div class="setting-row">
+          <label id="sound-label"></label>
+          <div id="sound-toggle" class="toggle"></div>
+        </div>
+        <div class="setting-row">
+          <label id="vibration-label"></label>
+          <div id="vibration-toggle" class="toggle"></div>
+        </div>
       </div>
+      <button id="back-from-settings"></button>
     </div>
-    
-    <!-- Game Timer Screen -->
-    <div id="timerScreen" class="screen">
-      <div class="text-center">
-        <h2 id="discussTitle" class="text-3xl md:text-4xl font-bold text-white mb-8 slide-down" style="text-shadow: 0 0 30px var(--primary);">
-          Discussion Time
-        </h2>
-        
-        <div class="relative w-64 h-64 md:w-80 md:h-80 mx-auto scale-in">
-          <svg class="w-full h-full" viewBox="0 0 160 160">
-            <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
-            <circle id="timerRing" class="timer-ring" cx="80" cy="80" r="70" fill="none" stroke="var(--primary)" stroke-width="8" stroke-linecap="round"/>
-          </svg>
-          <div class="absolute inset-0 flex items-center justify-center">
-            <span id="timerDisplay" class="text-6xl md:text-7xl font-bold text-white" style="text-shadow: 0 0 30px var(--primary);">3:00</span>
+
+    <!-- Setup Page -->
+    <div id="setup-page" class="page">
+      <h2 id="setup-title"></h2>
+      <form id="setup-form">
+        <div class="field glass">
+          <div class="field-head">
+            <label id="player-count-label" for="player-count"></label>
+            <span class="value" id="player-count-val"></span>
           </div>
+          <input id="player-count" type="range" min="3" max="20" step="1" value="4" />
         </div>
-        
-        <div id="wordHint" class="glass-card rounded-2xl px-8 py-4 mt-8 slide-up">
-          <p id="hintLabel" class="text-white/60 text-sm mb-1">The Secret Word</p>
-          <p id="hintWord" class="text-2xl font-bold text-white">---</p>
+
+        <div class="field glass">
+          <div class="field-head">
+            <label id="spy-count-label" for="spy-count"></label>
+            <span class="value" id="spy-count-val"></span>
+          </div>
+          <input id="spy-count" type="range" min="1" max="2" step="1" value="1" />
         </div>
-        
-        <button id="btnEndDiscussion" class="glass-button w-full max-w-sm mt-8 py-4 rounded-2xl text-lg font-semibold text-white slide-up hidden" onclick="endDiscussion()">
-          🗳️ Start Voting
-        </button>
-      </div>
+
+        <div class="field glass">
+          <div class="field-head">
+            <label id="round-time-label" for="round-time"></label>
+            <span class="value" id="round-time-val"></span>
+          </div>
+          <input id="round-time" type="range" min="1" max="10" step="1" value="3" />
+        </div>
+
+        <div class="field glass">
+          <div class="field-head">
+            <label id="rounds-label" for="rounds"></label>
+            <span class="value" id="rounds-val"></span>
+          </div>
+          <input id="rounds" type="range" min="1" max="10" step="1" value="3" />
+        </div>
+
+        <div class="field glass">
+          <div class="field-head">
+            <label id="difficulty-label" for="difficulty"></label>
+          </div>
+          <select id="difficulty">
+            <option value="easy"></option>
+            <option value="medium"></option>
+            <option value="hard"></option>
+            <option value="extreme"></option>
+          </select>
+        </div>
+        <button type="button" id="start-game"></button>
+      </form>
     </div>
-    
-    <!-- Voting Screen -->
-    <div id="votingScreen" class="screen">
-      <div class="w-full max-w-lg">
-        <h2 id="voteTitle" class="text-3xl md:text-4xl font-bold text-white text-center mb-4 slide-down" style="text-shadow: 0 0 30px var(--primary);">
-          Vote for the Spy
-        </h2>
-        <p id="voteSubtitle" class="text-white/60 text-center mb-8 slide-down">Who do you think is the spy?</p>
-        
-        <div id="votingGrid" class="grid grid-cols-2 gap-4 mb-8">
-          <!-- Player cards will be generated here -->
+
+    <!-- Role Reveal Page -->
+    <div id="role-page" class="page">
+      <h2 id="reveal-title"></h2>
+      <div id="role-card" class="card">
+        <div class="card-inner">
+          <div class="card-face card-front" id="role-front">Tap to reveal</div>
+          <div class="card-face card-back" id="role-back"></div>
         </div>
-        
-        <button id="btnConfirmVote" class="glass-button w-full py-5 rounded-2xl text-xl font-semibold text-white glow-primary hidden" onclick="confirmVotes()">
-          Confirm Votes
-        </button>
       </div>
+      <p id="role-instructions"></p>
     </div>
-    
-    <!-- Result Screen -->
-    <div id="resultScreen" class="screen">
-      <div class="text-center w-full max-w-md">
-        <div id="resultCard" class="glass-card rounded-3xl p-8 md:p-12 scale-in">
-          <div id="resultIcon" class="text-8xl mb-6"></div>
-          <h2 id="resultTitle" class="text-3xl md:text-4xl font-bold text-white mb-4"></h2>
-          <p id="resultMessage" class="text-xl text-white/80 mb-6"></p>
-          
-          <div class="glass rounded-2xl p-4 mb-4">
-            <p id="revealSpyLabel" class="text-white/60 text-sm mb-1">The Spy Was</p>
-            <p id="revealSpy" class="text-2xl font-bold text-white"></p>
-          </div>
-          
-          <div class="glass rounded-2xl p-4">
-            <p id="revealWordLabel" class="text-white/60 text-sm mb-1">The Word Was</p>
-            <p id="revealWord" class="text-2xl font-bold text-white"></p>
-          </div>
-        </div>
-        
-        <button id="btnPlayAgain" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white glow-primary" onclick="playAgain()">
-          🔄 Play Again
-        </button>
-        
-        <button id="btnNewSetup" class="glass-button w-full mt-4 py-3 rounded-xl text-white/70" onclick="newSetup()">
-          ⚙️ New Setup
-        </button>
+
+    <!-- Timer & Voting Page -->
+    <div id="timer-page" class="page">
+      <h2 id="timer-title"></h2>
+      <div id="timer-container">
+        <svg id="timer-svg" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="6"/>
+          <circle id="timer-ring" cx="50" cy="50" r="45" fill="none" stroke="var(--secondary)" stroke-width="6" stroke-dasharray="282.743" stroke-dashoffset="0"/>
+        </svg>
       </div>
+      <button id="vote-button"></button>
+    </div>
+
+    <!-- Voting Page -->
+    <div id="vote-page" class="page">
+      <h2 id="vote-title"></h2>
+      <div id="vote-list"></div>
+      <button id="show-result-btn"></button>
+    </div>
+
+    <!-- Result Page -->
+    <div id="result-page" class="page">
+      <h2 id="result-title"></h2>
+      <p id="result-message"></p>
+      <button id="back-to-menu"></button>
     </div>
   </div>
 
   <script>
-    // ═══════════════════════════════════════════════════════════════
-    // WORD DATABASE (1500+ words)
-    // ═══════════════════════════════════════════════════════════════
-    const WORDS = {
-      en: [
-        "Apple", "Banana", "Orange", "Grape", "Mango", "Strawberry", "Watermelon", "Pineapple", "Cherry", "Peach",
-        "Hospital", "School", "Library", "Airport", "Restaurant", "Museum", "Cinema", "Theater", "Stadium", "Hotel",
-        "Doctor", "Teacher", "Pilot", "Chef", "Artist", "Musician", "Actor", "Scientist", "Engineer", "Lawyer",
-        "Car", "Bicycle", "Motorcycle", "Bus", "Train", "Airplane", "Helicopter", "Boat", "Submarine", "Rocket",
-        "Dog", "Cat", "Elephant", "Lion", "Tiger", "Bear", "Wolf", "Fox", "Rabbit", "Deer",
-        "Mountain", "Ocean", "River", "Forest", "Desert", "Island", "Valley", "Volcano", "Waterfall", "Canyon",
-        "Pizza", "Burger", "Sushi", "Pasta", "Salad", "Sandwich", "Soup", "Steak", "Chicken", "Fish",
-        "Guitar", "Piano", "Violin", "Drums", "Trumpet", "Flute", "Saxophone", "Harp", "Cello", "Accordion",
-        "Football", "Basketball", "Tennis", "Golf", "Swimming", "Boxing", "Wrestling", "Cycling", "Skiing", "Surfing",
-        "Camera", "Computer", "Television", "Radio", "Telephone", "Microwave", "Refrigerator", "Washing Machine", "Vacuum", "Fan",
-        "Sunglasses", "Watch", "Ring", "Necklace", "Bracelet", "Earrings", "Hat", "Scarf", "Gloves", "Belt",
-        "Coffee", "Tea", "Juice", "Milk", "Water", "Soda", "Wine", "Beer", "Cocktail", "Smoothie",
-        "Book", "Magazine", "Newspaper", "Letter", "Postcard", "Diary", "Novel", "Dictionary", "Encyclopedia", "Comic",
-        "Chair", "Table", "Sofa", "Bed", "Desk", "Lamp", "Mirror", "Clock", "Carpet", "Curtain",
-        "Shirt", "Pants", "Dress", "Skirt", "Jacket", "Sweater", "Coat", "Shoes", "Boots", "Sandals",
-        "Pen", "Pencil", "Eraser", "Ruler", "Scissors", "Glue", "Tape", "Stapler", "Marker", "Crayon",
-        "Soap", "Shampoo", "Toothbrush", "Toothpaste", "Towel", "Comb", "Razor", "Perfume", "Lotion", "Sunscreen",
-        "Key", "Lock", "Door", "Window", "Wall", "Floor", "Ceiling", "Roof", "Stairs", "Elevator",
-        "Tree", "Flower", "Grass", "Leaf", "Branch", "Root", "Seed", "Fruit", "Vegetable", "Herb",
-        "Sun", "Moon", "Star", "Cloud", "Rain", "Snow", "Wind", "Storm", "Rainbow", "Lightning",
-        "Fire", "Water", "Earth", "Air", "Ice", "Steam", "Smoke", "Dust", "Sand", "Stone",
-        "Gold", "Silver", "Diamond", "Pearl", "Ruby", "Emerald", "Sapphire", "Bronze", "Copper", "Iron",
-        "King", "Queen", "Prince", "Princess", "Knight", "Wizard", "Dragon", "Castle", "Crown", "Throne",
-        "Angel", "Ghost", "Vampire", "Werewolf", "Zombie", "Monster", "Alien", "Robot", "Superhero", "Villain",
-        "Birthday", "Wedding", "Graduation", "Holiday", "Festival", "Parade", "Concert", "Party", "Picnic", "Barbecue",
-        "Sunrise", "Sunset", "Midnight", "Morning", "Evening", "Afternoon", "Dawn", "Dusk", "Noon", "Night",
-        "Spring", "Summer", "Autumn", "Winter", "Season", "Weather", "Climate", "Temperature", "Humidity", "Pressure",
-        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Weekend", "Weekday", "Holiday",
-        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
-        "Circle", "Square", "Triangle", "Rectangle", "Diamond", "Heart", "Star", "Oval", "Pentagon", "Hexagon",
-        "Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Pink", "Brown", "Black", "White",
-        "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-        "Baby", "Child", "Teenager", "Adult", "Senior", "Parent", "Grandparent", "Sibling", "Cousin", "Friend",
-        "Love", "Hate", "Fear", "Joy", "Sadness", "Anger", "Surprise", "Disgust", "Trust", "Hope",
-        "Brain", "Heart", "Lung", "Liver", "Kidney", "Stomach", "Bone", "Muscle", "Skin", "Blood",
-        "Eye", "Ear", "Nose", "Mouth", "Hand", "Foot", "Arm", "Leg", "Head", "Face",
-        "Dream", "Memory", "Thought", "Idea", "Imagination", "Creativity", "Intelligence", "Wisdom", "Knowledge", "Experience",
-        "Music", "Dance", "Painting", "Sculpture", "Photography", "Film", "Literature", "Poetry", "Drama", "Comedy",
-        "Science", "Mathematics", "History", "Geography", "Physics", "Chemistry", "Biology", "Astronomy", "Psychology", "Philosophy",
-        "Internet", "Website", "Email", "Social Media", "Video", "Photo", "Message", "Call", "Chat", "Stream",
-        "Game", "Puzzle", "Quiz", "Riddle", "Trivia", "Challenge", "Competition", "Race", "Match", "Tournament",
-        "Adventure", "Mystery", "Romance", "Horror", "Fantasy", "Science Fiction", "Thriller", "Action", "Comedy", "Drama",
-        "Hero", "Villain", "Sidekick", "Mentor", "Love Interest", "Rival", "Friend", "Enemy", "Stranger", "Guide",
-        "Beginning", "Middle", "End", "Climax", "Resolution", "Plot", "Setting", "Character", "Theme", "Conflict",
-        "North", "South", "East", "West", "Up", "Down", "Left", "Right", "Forward", "Backward",
-        "Fast", "Slow", "Big", "Small", "Hot", "Cold", "Loud", "Quiet", "Light", "Dark",
-        "Happy", "Sad", "Excited", "Bored", "Tired", "Energetic", "Calm", "Nervous", "Confident", "Shy",
-        "Smart", "Funny", "Kind", "Brave", "Honest", "Creative", "Patient", "Generous", "Loyal", "Humble",
-        "Rich", "Poor", "Famous", "Unknown", "Powerful", "Weak", "Old", "Young", "New", "Ancient",
-        "Magic", "Science", "Technology", "Nature", "Art", "Culture", "Religion", "Politics", "Economy", "Society",
-        "Peace", "War", "Freedom", "Justice", "Equality", "Unity", "Diversity", "Progress", "Tradition", "Change",
-        "Success", "Failure", "Victory", "Defeat", "Achievement", "Goal", "Dream", "Reality", "Fantasy", "Truth",
-        "Past", "Present", "Future", "History", "Memory", "Prediction", "Plan", "Schedule", "Deadline", "Milestone",
-        "Problem", "Solution", "Question", "Answer", "Theory", "Evidence", "Proof", "Argument", "Debate", "Discussion",
-        "Leader", "Follower", "Team", "Group", "Community", "Organization", "Company", "Government", "Institution", "System",
-        "Rule", "Law", "Policy", "Regulation", "Standard", "Guideline", "Principle", "Value", "Belief", "Opinion",
-        "Risk", "Reward", "Chance", "Opportunity", "Challenge", "Obstacle", "Barrier", "Bridge", "Path", "Journey",
-        "Start", "Finish", "Beginning", "Ending", "Opening", "Closing", "Entry", "Exit", "Arrival", "Departure",
-        "Connection", "Relationship", "Bond", "Link", "Network", "Partnership", "Collaboration", "Cooperation", "Competition", "Rivalry",
-        "Growth", "Development", "Evolution", "Revolution", "Transformation", "Change", "Progress", "Improvement", "Innovation", "Discovery",
-        "Balance", "Harmony", "Order", "Chaos", "Stability", "Change", "Flow", "Movement", "Stillness", "Rest",
-        "Light", "Shadow", "Reflection", "Image", "Mirror", "Window", "Door", "Gate", "Bridge", "Wall",
-        "Sound", "Silence", "Music", "Noise", "Voice", "Whisper", "Shout", "Echo", "Rhythm", "Melody",
-        "Taste", "Smell", "Touch", "Sight", "Hearing", "Sense", "Feeling", "Emotion", "Intuition", "Instinct",
-        "Space", "Time", "Matter", "Energy", "Force", "Motion", "Speed", "Direction", "Distance", "Position",
-        "Wave", "Particle", "Field", "Quantum", "Atom", "Molecule", "Cell", "Organism", "Species", "Ecosystem",
-        "Planet", "Star", "Galaxy", "Universe", "Cosmos", "Black Hole", "Nebula", "Comet", "Asteroid", "Meteor",
-        "Continent", "Country", "City", "Town", "Village", "Neighborhood", "Street", "Building", "House", "Room",
-        "Map", "Compass", "GPS", "Navigation", "Direction", "Route", "Path", "Trail", "Road", "Highway",
-        "Engine", "Wheel", "Brake", "Steering", "Gear", "Fuel", "Battery", "Motor", "Transmission", "Suspension",
-        "Screen", "Keyboard", "Mouse", "Speaker", "Microphone", "Camera", "Printer", "Scanner", "Router", "Server",
-        "Software", "Hardware", "Program", "Application", "System", "Network", "Database", "Algorithm", "Code", "Data",
-        "File", "Folder", "Document", "Spreadsheet", "Presentation", "Image", "Video", "Audio", "Text", "Format",
-        "Button", "Menu", "Icon", "Window", "Tab", "Link", "Form", "Input", "Output", "Interface",
-        "Login", "Password", "Account", "Profile", "Settings", "Privacy", "Security", "Backup", "Update", "Download",
-        "Search", "Filter", "Sort", "Select", "Copy", "Paste", "Delete", "Edit", "Save", "Share",
-        "Message", "Notification", "Alert", "Reminder", "Calendar", "Contact", "List", "Note", "Bookmark", "Tag",
-        "Cart", "Checkout", "Payment", "Order", "Delivery", "Return", "Review", "Rating", "Wishlist", "Subscription",
-        "Player", "Score", "Level", "Achievement", "Badge", "Rank", "Leaderboard", "Multiplayer", "Single Player", "Tutorial",
-        "Character", "Avatar", "Inventory", "Equipment", "Skill", "Ability", "Power", "Health", "Energy", "Experience",
-        "Quest", "Mission", "Challenge", "Puzzle", "Boss", "Enemy", "Ally", "NPC", "Loot", "Treasure",
-        "Map", "World", "Zone", "Area", "Region", "Landmark", "Checkpoint", "Spawn", "Respawn", "Portal",
-        "Attack", "Defense", "Speed", "Strength", "Intelligence", "Luck", "Critical", "Combo", "Special", "Ultimate",
-        "Sword", "Shield", "Bow", "Arrow", "Staff", "Wand", "Armor", "Helmet", "Boots", "Gauntlets",
-        "Potion", "Scroll", "Gem", "Crystal", "Rune", "Charm", "Talisman", "Artifact", "Relic", "Treasure",
-        "Forest", "Cave", "Dungeon", "Castle", "Tower", "Village", "City", "Kingdom", "Empire", "Realm",
-        "Warrior", "Mage", "Archer", "Rogue", "Healer", "Tank", "Support", "Assassin", "Paladin", "Ranger",
-        "Fire", "Ice", "Lightning", "Earth", "Wind", "Water", "Light", "Dark", "Poison", "Healing",
-        "Pirate", "Ninja", "Samurai", "Viking", "Cowboy", "Astronaut", "Explorer", "Detective", "Spy", "Agent",
-        "Treasure", "Map", "Compass", "Telescope", "Binoculars", "Backpack", "Tent", "Campfire", "Fishing Rod", "Lantern",
-        "Ship", "Anchor", "Sail", "Deck", "Cabin", "Crew", "Captain", "Navigator", "Lookout", "Cargo",
-        "Jungle", "Safari", "Expedition", "Discovery", "Adventure", "Exploration", "Journey", "Quest", "Mission", "Voyage",
-        "Temple", "Pyramid", "Ruins", "Tomb", "Chamber", "Corridor", "Hall", "Throne Room", "Treasury", "Library",
-        "Trap", "Puzzle", "Secret", "Hidden", "Mystery", "Clue", "Evidence", "Investigation", "Solution", "Revelation",
-        "Magic Carpet", "Flying Broom", "Time Machine", "Teleporter", "Invisibility Cloak", "Magic Lamp", "Crystal Ball", "Enchanted Mirror", "Portal", "Gateway",
-        "Unicorn", "Phoenix", "Griffin", "Pegasus", "Mermaid", "Centaur", "Minotaur", "Sphinx", "Kraken", "Hydra",
-        "Fairy", "Elf", "Dwarf", "Goblin", "Orc", "Troll", "Ogre", "Giant", "Titan", "Demon",
-        "Spell", "Curse", "Blessing", "Enchantment", "Ritual", "Incantation", "Summoning", "Transformation", "Teleportation", "Healing",
-        "Potion", "Elixir", "Antidote", "Poison", "Serum", "Tonic", "Brew", "Concoction", "Mixture", "Formula",
-        "Wand", "Staff", "Orb", "Amulet", "Ring", "Crown", "Scepter", "Chalice", "Book", "Scroll",
-        "Academy", "Guild", "Order", "Council", "Brotherhood", "Sisterhood", "Alliance", "Federation", "Empire", "Kingdom",
-        "Apprentice", "Journeyman", "Master", "Grandmaster", "Legend", "Myth", "Hero", "Champion", "Savior", "Chosen One",
-        "Prophecy", "Destiny", "Fate", "Fortune", "Luck", "Chance", "Choice", "Decision", "Consequence", "Outcome",
-        "Beginning", "Middle", "End", "Prologue", "Epilogue", "Chapter", "Volume", "Series", "Saga", "Chronicle",
-        "Villain", "Nemesis", "Rival", "Antagonist", "Boss", "Mastermind", "Henchman", "Minion", "Spy", "Traitor",
-        "Battle", "War", "Conflict", "Struggle", "Fight", "Duel", "Tournament", "Championship", "Showdown", "Finale",
-        "Victory", "Defeat", "Draw", "Surrender", "Retreat", "Advance", "Attack", "Defense", "Strategy", "Tactics",
-        "Alliance", "Treaty", "Truce", "Peace", "Negotiation", "Diplomacy", "Trade", "Embargo", "Sanction", "Blockade",
-        "Revolution", "Rebellion", "Uprising", "Coup", "Overthrow", "Reform", "Change", "Progress", "Regression", "Stagnation",
-        "Democracy", "Monarchy", "Dictatorship", "Republic", "Federation", "Empire", "Colony", "Territory", "Province", "State",
-        "Parliament", "Congress", "Senate", "Council", "Assembly", "Court", "Tribunal", "Commission", "Committee", "Board",
-        "President", "Prime Minister", "Chancellor", "Governor", "Mayor", "Senator", "Representative", "Judge", "Lawyer", "Prosecutor",
-        "Election", "Vote", "Ballot", "Campaign", "Debate", "Speech", "Rally", "Protest", "March", "Demonstration",
-        "Law", "Constitution", "Amendment", "Bill", "Act", "Statute", "Regulation", "Policy", "Decree", "Mandate",
-        "Rights", "Freedoms", "Liberties", "Duties", "Responsibilities", "Obligations", "Privileges", "Immunities", "Protections", "Guarantees",
-        "Justice", "Equality", "Fairness", "Impartiality", "Objectivity", "Neutrality", "Balance", "Proportion", "Moderation", "Restraint",
-        "Crime", "Punishment", "Sentence", "Prison", "Jail", "Parole", "Probation", "Fine", "Community Service", "Rehabilitation",
-        "Evidence", "Witness", "Testimony", "Confession", "Alibi", "Motive", "Opportunity", "Means", "Intent", "Premeditation",
-        "Investigation", "Interrogation", "Surveillance", "Forensics", "Autopsy", "Ballistics", "Fingerprint", "DNA", "Blood", "Fiber",
-        "Suspect", "Perpetrator", "Accomplice", "Accessory", "Mastermind", "Victim", "Survivor", "Witness", "Informant", "Detective",
-        "Police", "Sheriff", "Marshal", "Agent", "Officer", "Deputy", "Sergeant", "Lieutenant", "Captain", "Chief",
-        "FBI", "CIA", "NSA", "MI6", "KGB", "Interpol", "Scotland Yard", "Secret Service", "Marines", "Navy",
-        "Headquarters", "Station", "Precinct", "Office", "Bureau", "Agency", "Department", "Division", "Unit", "Squad",
-        "Patrol", "Surveillance", "Stakeout", "Raid", "Bust", "Arrest", "Detention", "Interrogation", "Trial", "Verdict",
-        "Handcuffs", "Badge", "Gun", "Taser", "Baton", "Vest", "Helmet", "Radio", "Flashlight", "Siren",
-        "Fingerprint", "Mugshot", "Lineup", "Sketch", "Profile", "Database", "Record", "File", "Report", "Evidence",
-        "Informant", "Undercover", "Disguise", "Alias", "Cover Story", "Safe House", "Dead Drop", "Code", "Cipher", "Encryption",
-        "Mission", "Operation", "Assignment", "Task", "Objective", "Target", "Asset", "Handler", "Contact", "Source",
-        "Gadget", "Device", "Equipment", "Tool", "Weapon", "Vehicle", "Uniform", "Gear", "Kit", "Supplies",
-        "Briefing", "Debriefing", "Intelligence", "Analysis", "Assessment", "Report", "Document", "Dossier", "File", "Record",
-        "Infiltration", "Extraction", "Rescue", "Sabotage", "Assassination", "Surveillance", "Reconnaissance", "Interception", "Decryption", "Transmission",
-        "Headquarters", "Base", "Bunker", "Compound", "Facility", "Laboratory", "Warehouse", "Factory", "Plant", "Complex",
-        "Security", "Guard", "Patrol", "Camera", "Sensor", "Alarm", "Lock", "Safe", "Vault", "Barrier",
-        "Password", "Keycard", "Biometric", "Retina Scan", "Fingerprint", "Voice Recognition", "Facial Recognition", "Access Code", "Clearance", "Authorization",
-        "Classified", "Top Secret", "Confidential", "Restricted", "Eyes Only", "Need to Know", "Compartmentalized", "Redacted", "Censored", "Sealed",
-        "Conspiracy", "Cover-up", "Scandal", "Corruption", "Bribery", "Blackmail", "Extortion", "Fraud", "Embezzlement", "Money Laundering",
-        "Whistleblower", "Leak", "Exposure", "Revelation", "Disclosure", "Investigation", "Inquiry", "Hearing", "Trial", "Verdict",
-        "Escape", "Chase", "Pursuit", "Hunt", "Search", "Rescue", "Recovery", "Evacuation", "Extraction", "Exfiltration",
-        "Hostage", "Kidnapping", "Ransom", "Negotiation", "Standoff", "Siege", "Assault", "Breach", "Entry", "Clearance",
-        "Bomb", "Explosive", "Detonator", "Timer", "Trigger", "Fuse", "Charge", "Blast", "Shockwave", "Debris",
-        "Defuse", "Disarm", "Neutralize", "Contain", "Evacuate", "Secure", "Clear", "Sweep", "Inspect", "Verify",
-        "Sniper", "Rifle", "Scope", "Target", "Range", "Wind", "Elevation", "Trajectory", "Bullet", "Impact",
-        "Martial Arts", "Combat", "Fighting", "Technique", "Style", "Form", "Stance", "Block", "Strike", "Kick",
-        "Stealth", "Silent", "Shadow", "Concealment", "Camouflage", "Invisibility", "Detection", "Evasion", "Escape", "Pursuit",
-        "Parkour", "Free Running", "Climbing", "Jumping", "Rolling", "Sliding", "Vaulting", "Swinging", "Balancing", "Landing",
-        "Driving", "Racing", "Chasing", "Drifting", "Braking", "Accelerating", "Maneuvering", "Evading", "Crashing", "Escaping",
-        "Flying", "Piloting", "Aviation", "Aircraft", "Helicopter", "Jet", "Drone", "Parachute", "Glider", "Wing",
-        "Diving", "Swimming", "Submarine", "Underwater", "Scuba", "Aquatic", "Marine", "Ocean", "Depth", "Pressure",
-        "Mountain", "Climbing", "Hiking", "Camping", "Survival", "Wilderness", "Nature", "Environment", "Terrain", "Weather",
-        "Desert", "Jungle", "Arctic", "Tropical", "Urban", "Rural", "Industrial", "Residential", "Commercial", "Military",
-        "Night", "Day", "Dawn", "Dusk", "Morning", "Afternoon", "Evening", "Midnight", "Sunrise", "Sunset",
-        "Storm", "Rain", "Snow", "Wind", "Fog", "Lightning", "Thunder", "Hurricane", "Tornado", "Earthquake",
-        "Fire", "Flood", "Explosion", "Collapse", "Crash", "Wreck", "Disaster", "Catastrophe", "Emergency", "Crisis",
-        "Hospital", "Ambulance", "Paramedic", "Doctor", "Nurse", "Patient", "Surgery", "Treatment", "Recovery", "Rehabilitation",
-        "Laboratory", "Scientist", "Researcher", "Experiment", "Discovery", "Invention", "Innovation", "Technology", "Science", "Knowledge",
-        "Computer", "Hacking", "Programming", "Coding", "Software", "Hardware", "Network", "System", "Database", "Algorithm",
-        "Virus", "Malware", "Trojan", "Worm", "Ransomware", "Spyware", "Adware", "Botnet", "Phishing", "Scam",
-        "Firewall", "Antivirus", "Encryption", "Decryption", "Password", "Authentication", "Authorization", "Security", "Privacy", "Protection",
-        "Satellite", "Communication", "Transmission", "Signal", "Frequency", "Channel", "Broadcast", "Reception", "Interference", "Jamming",
-        "Radar", "Sonar", "Lidar", "Thermal", "Infrared", "Night Vision", "X-Ray", "Scanner", "Detector", "Sensor",
-        "Robot", "Android", "Cyborg", "AI", "Machine Learning", "Neural Network", "Deep Learning", "Algorithm", "Automation", "Control",
-        "Virtual Reality", "Augmented Reality", "Simulation", "Hologram", "Projection", "Display", "Interface", "Controller", "Headset", "Goggles",
-        "Time Travel", "Teleportation", "Dimension", "Parallel Universe", "Multiverse", "Wormhole", "Black Hole", "Singularity", "Quantum", "Relativity",
-        "Alien", "UFO", "Spacecraft", "Space Station", "Colony", "Terraforming", "Asteroid", "Comet", "Meteor", "Planet",
-        "Laser", "Plasma", "Energy", "Power", "Force Field", "Shield", "Weapon", "Cannon", "Blaster", "Beam",
-        "Cloning", "Genetic Engineering", "DNA", "Mutation", "Evolution", "Enhancement", "Augmentation", "Modification", "Transformation", "Adaptation",
-        "Mind Control", "Telepathy", "Telekinesis", "Psychic", "ESP", "Precognition", "Remote Viewing", "Astral Projection", "Out of Body", "Sixth Sense",
-        "Super Strength", "Super Speed", "Flight", "Invisibility", "Invulnerability", "Regeneration", "Shape Shifting", "Elemental Control", "Energy Manipulation", "Reality Warping",
-        "Hero", "Vigilante", "Antihero", "Villain", "Nemesis", "Arch Enemy", "Sidekick", "Partner", "Team", "League",
-        "Secret Identity", "Alter Ego", "Origin Story", "Backstory", "Motivation", "Power", "Weakness", "Kryptonite", "Achilles Heel", "Fatal Flaw",
-        "Costume", "Mask", "Cape", "Suit", "Armor", "Symbol", "Emblem", "Logo", "Colors", "Design",
-        "Base", "Headquarters", "Lair", "Hideout", "Cave", "Tower", "Fortress", "Sanctuary", "Safe House", "Secret Location",
-        "Vehicle", "Jet", "Car", "Motorcycle", "Boat", "Submarine", "Helicopter", "Plane", "Spaceship", "Time Machine",
-        "Gadget", "Device", "Weapon", "Tool", "Equipment", "Gear", "Technology", "Invention", "Creation", "Innovation",
-        "Training", "Practice", "Exercise", "Workout", "Discipline", "Focus", "Concentration", "Meditation", "Preparation", "Readiness",
-        "Mission", "Quest", "Adventure", "Journey", "Challenge", "Test", "Trial", "Ordeal", "Battle", "War",
-        "Ally", "Friend", "Partner", "Teammate", "Mentor", "Teacher", "Guide", "Helper", "Supporter", "Protector",
-        "Enemy", "Foe", "Opponent", "Rival", "Adversary", "Antagonist", "Threat", "Danger", "Menace", "Peril"
-      ],
-      fa: [
-        "سیب", "موز", "پرتقال", "انگور", "انبه", "توت فرنگی", "هندوانه", "آناناس", "گیلاس", "هلو",
-        "بیمارستان", "مدرسه", "کتابخانه", "فرودگاه", "رستوران", "موزه", "سینما", "تئاتر", "استادیوم", "هتل",
-        "دکتر", "معلم", "خلبان", "آشپز", "هنرمند", "موسیقیدان", "بازیگر", "دانشمند", "مهندس", "وکیل",
-        "ماشین", "دوچرخه", "موتورسیکلت", "اتوبوس", "قطار", "هواپیما", "هلیکوپتر", "قایق", "زیردریایی", "موشک",
-        "سگ", "گربه", "فیل", "شیر", "ببر", "خرس", "گرگ", "روباه", "خرگوش", "آهو",
-        "کوه", "اقیانوس", "رودخانه", "جنگل", "صحرا", "جزیره", "دره", "آتشفشان", "آبشار", "دره عمیق",
-        "پیتزا", "همبرگر", "سوشی", "پاستا", "سالاد", "ساندویچ", "سوپ", "استیک", "مرغ", "ماهی",
-        "گیتار", "پیانو", "ویولن", "درام", "ترومپت", "فلوت", "ساکسیفون", "چنگ", "ویولنسل", "آکاردئون",
-        "فوتبال", "بسکتبال", "تنیس", "گلف", "شنا", "بوکس", "کشتی", "دوچرخه سواری", "اسکی", "موج سواری",
-        "دوربین", "کامپیوتر", "تلویزیون", "رادیو", "تلفن", "مایکروویو", "یخچال", "ماشین لباسشویی", "جاروبرقی", "پنکه",
-        "عینک آفتابی", "ساعت", "انگشتر", "گردنبند", "دستبند", "گوشواره", "کلاه", "شال", "دستکش", "کمربند",
-        "قهوه", "چای", "آبمیوه", "شیر", "آب", "نوشابه", "شراب", "آبجو", "کوکتل", "اسموتی",
-        "کتاب", "مجله", "روزنامه", "نامه", "کارت پستال", "دفتر خاطرات", "رمان", "فرهنگ لغت", "دایرةالمعارف", "کمیک",
-        "صندلی", "میز", "مبل", "تخت", "میز کار", "لامپ", "آینه", "ساعت", "فرش", "پرده",
-        "پیراهن", "شلوار", "لباس", "دامن", "ژاکت", "ژامپر", "کت", "کفش", "چکمه", "صندل",
-        "خودکار", "مداد", "پاک کن", "خط کش", "قیچی", "چسب", "نوار چسب", "منگنه", "ماژیک", "مداد رنگی",
-        "صابون", "شامپو", "مسواک", "خمیردندان", "حوله", "شانه", "تیغ", "عطر", "لوسیون", "ضدآفتاب",
-        "کلید", "قفل", "در", "پنجره", "دیوار", "کف", "سقف", "بام", "پله", "آسانسور",
-        "درخت", "گل", "چمن", "برگ", "شاخه", "ریشه", "دانه", "میوه", "سبزی", "گیاه",
-        "خورشید", "ماه", "ستاره", "ابر", "باران", "برف", "باد", "طوفان", "رنگین کمان", "رعد و برق",
-        "آتش", "آب", "زمین", "هوا", "یخ", "بخار", "دود", "گرد و خاک", "شن", "سنگ",
-        "طلا", "نقره", "الماس", "مروارید", "یاقوت", "زمرد", "یاقوت کبود", "برنز", "مس", "آهن",
-        "پادشاه", "ملکه", "شاهزاده", "شاهدخت", "شوالیه", "جادوگر", "اژدها", "قلعه", "تاج", "تخت",
-        "فرشته", "روح", "خون آشام", "گرگینه", "زامبی", "هیولا", "فضایی", "ربات", "ابرقهرمان", "شرور",
-        "تولد", "عروسی", "فارغ التحصیلی", "تعطیلات", "جشنواره", "رژه", "کنسرت", "مهمانی", "پیک نیک", "باربیکیو",
-        "طلوع", "غروب", "نیمه شب", "صبح", "عصر", "بعدازظهر", "سپیده دم", "شفق", "ظهر", "شب",
-        "بهار", "تابستان", "پاییز", "زمستان", "فصل", "آب و هوا", "اقلیم", "دما", "رطوبت", "فشار",
-        "دوشنبه", "سه شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه", "آخر هفته", "روز کاری", "تعطیل",
-        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی",
-        "دایره", "مربع", "مثلث", "مستطیل", "لوزی", "قلب", "ستاره", "بیضی", "پنج ضلعی", "شش ضلعی",
-        "قرمز", "آبی", "سبز", "زرد", "نارنجی", "بنفش", "صورتی", "قهوه ای", "سیاه", "سفید",
-        "یک", "دو", "سه", "چهار", "پنج", "شش", "هفت", "هشت", "نه", "ده",
-        "نوزاد", "کودک", "نوجوان", "بزرگسال", "سالمند", "والدین", "پدربزرگ و مادربزرگ", "خواهر برادر", "پسرعمو", "دوست",
-        "عشق", "نفرت", "ترس", "شادی", "غم", "خشم", "تعجب", "انزجار", "اعتماد", "امید",
-        "مغز", "قلب", "ریه", "کبد", "کلیه", "معده", "استخوان", "ماهیچه", "پوست", "خون",
-        "چشم", "گوش", "بینی", "دهان", "دست", "پا", "بازو", "ساق پا", "سر", "صورت",
-        "رویا", "خاطره", "فکر", "ایده", "تخیل", "خلاقیت", "هوش", "حکمت", "دانش", "تجربه",
-        "موسیقی", "رقص", "نقاشی", "مجسمه سازی", "عکاسی", "فیلم", "ادبیات", "شعر", "درام", "کمدی",
-        "علم", "ریاضیات", "تاریخ", "جغرافیا", "فیزیک", "شیمی", "زیست شناسی", "نجوم", "روانشناسی", "فلسفه",
-        "اینترنت", "وب سایت", "ایمیل", "شبکه اجتماعی", "ویدیو", "عکس", "پیام", "تماس", "چت", "پخش",
-        "بازی", "پازل", "آزمون", "معما", "دانستنی", "چالش", "رقابت", "مسابقه", "رقابت", "تورنمنت",
-        "ماجراجویی", "رمز و راز", "عاشقانه", "ترسناک", "فانتزی", "علمی تخیلی", "هیجان انگیز", "اکشن", "کمدی", "درام",
-        "قهرمان", "شرور", "کمکی", "مربی", "عشق", "رقیب", "دوست", "دشمن", "غریبه", "راهنما",
-        "شروع", "میانه", "پایان", "اوج", "حل", "طرح", "تنظیم", "شخصیت", "تم", "تضاد",
-        "شمال", "جنوب", "شرق", "غرب", "بالا", "پایین", "چپ", "راست", "جلو", "عقب",
-        "سریع", "آهسته", "بزرگ", "کوچک", "گرم", "سرد", "بلند", "آرام", "روشن", "تاریک",
-        "خوشحال", "غمگین", "هیجان زده", "خسته", "خسته", "پرانرژی", "آرام", "عصبی", "مطمئن", "خجالتی",
-        "باهوش", "بامزه", "مهربان", "شجاع", "صادق", "خلاق", "صبور", "سخاوتمند", "وفادار", "فروتن",
-        "ثروتمند", "فقیر", "معروف", "ناشناخته", "قدرتمند", "ضعیف", "پیر", "جوان", "جدید", "باستانی",
-        "جادو", "علم", "فناوری", "طبیعت", "هنر", "فرهنگ", "مذهب", "سیاست", "اقتصاد", "جامعه",
-        "صلح", "جنگ", "آزادی", "عدالت", "برابری", "وحدت", "تنوع", "پیشرفت", "سنت", "تغییر",
-        "موفقیت", "شکست", "پیروزی", "شکست", "دستاورد", "هدف", "رویا", "واقعیت", "خیال", "حقیقت",
-        "گذشته", "حال", "آینده", "تاریخ", "خاطره", "پیش بینی", "برنامه", "زمانبندی", "مهلت", "نقطه عطف",
-        "مشکل", "راه حل", "سوال", "جواب", "تئوری", "شواهد", "اثبات", "استدلال", "بحث", "گفتگو",
-        "رهبر", "پیرو", "تیم", "گروه", "جامعه", "سازمان", "شرکت", "دولت", "نهاد", "سیستم",
-        "قانون", "قانون اساسی", "اصلاحیه", "لایحه", "مقررات", "استاندارد", "راهنما", "اصل", "ارزش", "باور",
-        "ریسک", "پاداش", "شانس", "فرصت", "چالش", "مانع", "سد", "پل", "مسیر", "سفر",
-        "شروع", "پایان", "آغاز", "خاتمه", "ورودی", "خروجی", "ورود", "خروج", "رسیدن", "رفتن",
-        "ارتباط", "رابطه", "پیوند", "لینک", "شبکه", "مشارکت", "همکاری", "تعاون", "رقابت", "رقابت",
-        "رشد", "توسعه", "تکامل", "انقلاب", "تحول", "تغییر", "پیشرفت", "بهبود", "نوآوری", "کشف",
-        "تعادل", "هماهنگی", "نظم", "هرج و مرج", "ثبات", "تغییر", "جریان", "حرکت", "سکون", "استراحت",
-        "نور", "سایه", "انعکاس", "تصویر", "آینه", "پنجره", "در", "دروازه", "پل", "دیوار",
-        "صدا", "سکوت", "موسیقی", "نویز", "صدا", "زمزمه", "فریاد", "اکو", "ریتم", "ملودی",
-        "طعم", "بو", "لمس", "بینایی", "شنوایی", "حس", "احساس", "عاطفه", "شهود", "غریزه",
-        "فضا", "زمان", "ماده", "انرژی", "نیرو", "حرکت", "سرعت", "جهت", "فاصله", "موقعیت",
-        "موج", "ذره", "میدان", "کوانتوم", "اتم", "مولکول", "سلول", "ارگانیسم", "گونه", "اکوسیستم",
-        "سیاره", "ستاره", "کهکشان", "جهان", "کیهان", "سیاهچاله", "سحابی", "دنباله دار", "سیارک", "شهاب",
-        "قاره", "کشور", "شهر", "شهرک", "روستا", "محله", "خیابان", "ساختمان", "خانه", "اتاق",
-        "نقشه", "قطب نما", "GPS", "ناوبری", "جهت", "مسیر", "راه", "کوره راه", "جاده", "بزرگراه",
-        "موتور", "چرخ", "ترمز", "فرمان", "دنده", "سوخت", "باتری", "موتور", "گیربکس", "تعلیق",
-        "صفحه نمایش", "صفحه کلید", "ماوس", "بلندگو", "میکروفون", "دوربین", "چاپگر", "اسکنر", "روتر", "سرور",
-        "نرم افزار", "سخت افزار", "برنامه", "اپلیکیشن", "سیستم", "شبکه", "پایگاه داده", "الگوریتم", "کد", "داده",
-        "فایل", "پوشه", "سند", "صفحه گسترده", "ارائه", "تصویر", "ویدیو", "صوت", "متن", "فرمت",
-        "دکمه", "منو", "آیکون", "پنجره", "تب", "لینک", "فرم", "ورودی", "خروجی", "رابط",
-        "ورود", "رمز عبور", "حساب", "پروفایل", "تنظیمات", "حریم خصوصی", "امنیت", "پشتیبان", "به روز رسانی", "دانلود",
-        "جستجو", "فیلتر", "مرتب سازی", "انتخاب", "کپی", "چسباندن", "حذف", "ویرایش", "ذخیره", "اشتراک",
-        "پیام", "اعلان", "هشدار", "یادآوری", "تقویم", "مخاطب", "لیست", "یادداشت", "نشانک", "برچسب",
-        "سبد خرید", "تسویه حساب", "پرداخت", "سفارش", "تحویل", "بازگشت", "بررسی", "امتیاز", "لیست علاقه مندی", "اشتراک",
-        "بازیکن", "امتیاز", "سطح", "دستاورد", "نشان", "رتبه", "تابلو امتیازات", "چندنفره", "تک نفره", "آموزش",
-        "شخصیت", "آواتار", "موجودی", "تجهیزات", "مهارت", "توانایی", "قدرت", "سلامت", "انرژی", "تجربه",
-        "ماموریت", "ماموریت", "چالش", "پازل", "باس", "دشمن", "متحد", "NPC", "غنیمت", "گنج",
-        "نقشه", "جهان", "منطقه", "منطقه", "ناحیه", "نشانه", "ایست بازرسی", "تخم ریزی", "احیا", "پورتال",
-        "حمله", "دفاع", "سرعت", "قدرت", "هوش", "شانس", "بحرانی", "ترکیبی", "ویژه", "نهایی",
-        "شمشیر", "سپر", "کمان", "تیر", "عصا", "چوب جادو", "زره", "کلاه خود", "چکمه", "دستکش",
-        "معجون", "طومار", "جواهر", "کریستال", "رون", "طلسم", "تعویذ", "اثر باستانی", "یادگار", "گنج",
-        "جنگل", "غار", "سیاهچال", "قلعه", "برج", "روستا", "شهر", "پادشاهی", "امپراتوری", "قلمرو",
-        "جنگجو", "جادوگر", "کماندار", "سارق", "شفادهنده", "تانک", "پشتیبان", "قاتل", "شوالیه", "رنجر",
-        "آتش", "یخ", "رعد و برق", "زمین", "باد", "آب", "نور", "تاریکی", "سم", "شفا",
-        "دزد دریایی", "نینجا", "سامورایی", "وایکینگ", "گاوچران", "فضانورد", "کاشف", "کارآگاه", "جاسوس", "مامور",
-        "گنج", "نقشه", "قطب نما", "تلسکوپ", "دوربین دوچشمی", "کوله پشتی", "چادر", "آتش کمپ", "چوب ماهیگیری", "فانوس",
-        "کشتی", "لنگر", "بادبان", "عرشه", "کابین", "خدمه", "کاپیتان", "ناوبر", "دیدبان", "محموله",
-        "جنگل", "سافاری", "اکتشاف", "کشف", "ماجراجویی", "اکتشاف", "سفر", "ماموریت", "ماموریت", "سفر دریایی",
-        "معبد", "هرم", "خرابه", "مقبره", "اتاق", "راهرو", "سالن", "اتاق تخت", "خزانه", "کتابخانه",
-        "تله", "پازل", "راز", "پنهان", "رمز و راز", "سرنخ", "شواهد", "تحقیق", "راه حل", "افشا",
-        "فرش پرنده", "جارو پرنده", "ماشین زمان", "تله پورت", "شنل نامرئی", "چراغ جادو", "گوی بلور", "آینه جادویی", "پورتال", "دروازه",
-        "تک شاخ", "ققنوس", "شیردال", "اسب بالدار", "پری دریایی", "سنتور", "مینوتور", "ابوالهول", "کراکن", "هیدرا",
-        "پری", "الف", "کوتوله", "گابلین", "اورک", "ترول", "غول", "غول", "تیتان", "دیو",
-        "طلسم", "نفرین", "نعمت", "جادو", "مراسم", "ورد", "احضار", "تبدیل", "تله پورت", "شفا",
-        "معجون", "اکسیر", "پادزهر", "سم", "سرم", "تونیک", "دمکرده", "ترکیب", "مخلوط", "فرمول",
-        "چوب جادو", "عصا", "گوی", "تعویذ", "انگشتر", "تاج", "عصای سلطنتی", "جام", "کتاب", "طومار",
-        "آکادمی", "صنف", "فرقه", "شورا", "برادری", "خواهری", "اتحاد", "فدراسیون", "امپراتوری", "پادشاهی",
-        "شاگرد", "کارآموز", "استاد", "استاد بزرگ", "افسانه", "اسطوره", "قهرمان", "قهرمان", "ناجی", "برگزیده",
-        "پیشگویی", "سرنوشت", "تقدیر", "بخت", "شانس", "اتفاق", "انتخاب", "تصمیم", "عواقب", "نتیجه",
-        "آغاز", "میانه", "پایان", "پیش درآمد", "مؤخره", "فصل", "جلد", "سری", "حماسه", "تاریخچه",
-        "شرور", "دشمن", "رقیب", "آنتاگونیست", "باس", "مغز متفکر", "دستیار", "پیرو", "جاسوس", "خائن",
-        "نبرد", "جنگ", "درگیری", "مبارزه", "جنگ", "دوئل", "تورنمنت", "قهرمانی", "رویارویی", "فینال",
-        "پیروزی", "شکست", "تساوی", "تسلیم", "عقب نشینی", "پیشروی", "حمله", "دفاع", "استراتژی", "تاکتیک"
-      ]
+    /* Application state and constants */
+    const state = {
+      language: localStorage.getItem('spyparty_language') || 'en',
+      primary: localStorage.getItem('spyparty_primary') || '#d8e3e7',
+      secondary: localStorage.getItem('spyparty_secondary') || '#8ec5fc',
+      sound: JSON.parse(localStorage.getItem('spyparty_sound') || 'true'),
+      vibration: JSON.parse(localStorage.getItem('spyparty_vibration') || 'true'),
+      players: [],
+      spies: [],
+      wordsUsed: JSON.parse(localStorage.getItem('spyparty_words') || '{}'),
+      wordBank: {
+        en: {
+          easy: ['apple','river','cat','market','car','star','window','music','garden','book'],
+          medium: ['airport','engineer','philosophy','university','restaurant','pyramid','eclipse','mountain','artist','chocolate'],
+          hard: ['cryptography','metamorphosis','subconscious','photosynthesis','architecture','microscopy','algorithm','parliament','laboratory','pendulum'],
+          extreme: ['polymerization','electromagnetism','photosynthetic','microprocessor','bureaucracy','quantization','bioinformatics','conflagration','neurotransmitter','philanthropist']
+        },
+        fa: {
+          easy: ['سیب','رود','گربه','بازار','ماشین','ستاره','پنجره','موسیقی','باغ','کتاب'],
+          medium: ['فرودگاه','مهندس','فلسفه','دانشگاه','رستوران','اهرام','خورشیدگرفتگی','کوهستان','هنرمند','شکلات'],
+          hard: ['رمزشناسی','دگردیسی','ناخودآگاه','فتوسنتز','معماری','میکروسکوپی','الگوریتم','مجلس','آزمایشگاه','پاندول'],
+          extreme: ['پلیمرسازی','الکترومغناطیس','فوتوسنتتیک','ریزپردازنده','بوروکراسی','کوانتش','زیست‌اطلاعاتی','حریق گسترده','نوروترانسمیتر','نیکوکاری']
+        }
+      },
+      currentRound: 0,
+      maxRounds: 1,
+      roundTime: 3,
+      playerCount: 4,
+      spyCount: 1,
+      difficulty: 'easy',
+      roles: [],
+      currentPlayerIndex: 0,
+      votes: {},
+      timerInterval: null,
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // TRANSLATIONS
-    // ═══════════════════════════════════════════════════════════════
-    const TRANSLATIONS = {
+    /* Translation dictionary */
+    const i18n = {
       en: {
-        gameSetup: "Game Setup",
-        players: "Players",
-        duration: "Duration",
-        themeColors: "Theme Colors",
-        primary: "Primary",
-        secondary: "Secondary",
-        startGame: "▶ Start Game",
-        changeLanguage: "← Change Language",
-        player: "Player",
-        tapToSee: "Tap to see your role",
-        youAreNormal: "You are a Citizen",
-        youAreSpy: "YOU ARE THE SPY",
-        theWord: "The Word",
-        hidden: "???",
-        confirmPass: "Confirm & Pass",
-        discussionTime: "Discussion Time",
-        secretWord: "The Secret Word",
-        startVoting: "🗳️ Start Voting",
-        voteForSpy: "Vote for the Spy",
-        whoIsSpy: "Who do you think is the spy?",
-        confirmVotes: "Confirm Votes",
-        playersFound: "Players Found the Spy!",
-        spyWins: "The Spy Wins!",
-        spyWas: "The Spy Was",
-        wordWas: "The Word Was",
-        playAgain: "🔄 Play Again",
-        newSetup: "⚙️ New Setup",
-        selectAll: "Everyone must vote!"
+        title: 'Spy Party',
+        continue: 'Continue',
+        guide: 'Guide',
+        settings: 'Settings',
+        guideTitle: 'How to Play',
+        guideText: 'In this party game, players are given secret roles. Most will receive a common word; one or more will be spies who receive no word. The spies must deduce the word through conversation without being discovered. Citizens must identify the spies.',
+        back: 'Back',
+        settingsTitle: 'Settings',
+        language: 'Language',
+        primaryColor: 'Primary color',
+        secondaryColor: 'Secondary color',
+        sound: 'Sound effects',
+        vibration: 'Vibration',
+        setupTitle: 'Game Setup',
+        playerCount: 'Number of players',
+        spyCount: 'Number of spies',
+        roundTime: 'Round time (minutes)',
+        rounds: 'Number of rounds',
+        difficulty: 'Difficulty',
+        easy: 'Easy',
+        medium: 'Medium',
+        hard: 'Hard',
+        extreme: 'Extreme',
+        start: 'Start Game',
+        tapReveal: 'Tap to reveal your role',
+        tapNext: 'Tap to pass to next player',
+        revealTitle: 'Role Reveal',
+        revealInstr: 'Each player taps to reveal their role. Pass the device to the next player.',
+        youAreSpy: 'You are the Spy',
+        yourWord: 'Your word:',
+        timerTitle: 'Discuss',
+        vote: 'Vote',
+        voteTitle: 'Voting',
+        voteInstructions: 'Select players you suspect of being spies and submit.',
+        showResult: 'Show Result',
+        resultTitle: 'Result',
+        citizensWin: 'Citizens win! All spies caught.',
+        spiesWin: 'Spies win! They remain hidden.',
+        draw: 'It\'s a draw.',
+        backToMenu: 'Back to Menu',
+        noMoreWords: 'No more unused words available. Please reset words from settings.',
       },
       fa: {
-        gameSetup: "تنظیمات بازی",
-        players: "تعداد بازیکنان",
-        duration: "مدت زمان",
-        themeColors: "رنگ های تم",
-        primary: "اصلی",
-        secondary: "فرعی",
-        startGame: "▶ شروع بازی",
-        changeLanguage: "← تغییر زبان",
-        player: "بازیکن",
-        tapToSee: "لمس کنید تا نقش خود را ببینید",
-        youAreNormal: "شما یک شهروند هستید",
-        youAreSpy: "شما جاسوس هستید",
-        theWord: "کلمه",
-        hidden: "؟؟؟",
-        confirmPass: "تایید و رد کردن",
-        discussionTime: "زمان بحث",
-        secretWord: "کلمه مخفی",
-        startVoting: "🗳️ شروع رای گیری",
-        voteForSpy: "به جاسوس رای بدهید",
-        whoIsSpy: "فکر می کنید جاسوس کیست؟",
-        confirmVotes: "تایید رای ها",
-        playersFound: "بازیکنان جاسوس را پیدا کردند!",
-        spyWins: "جاسوس برنده شد!",
-        spyWas: "جاسوس بود",
-        wordWas: "کلمه بود",
-        playAgain: "🔄 بازی دوباره",
-        newSetup: "⚙️ تنظیمات جدید",
-        selectAll: "همه باید رای بدهند!"
+        title: 'بازی جاسوس',
+        continue: 'ادامه',
+        guide: 'راهنما',
+        settings: 'تنظیمات',
+        guideTitle: 'نحوه بازی',
+        guideText: 'در این بازی گروهی، بازیکنان نقش‌های مخفی دریافت می‌کنند. اکثر بازیکنان یک کلمه مشترک می‌گیرند؛ اما یک یا چند نفر جاسوس هستند و کلمه‌ای ندارند. جاسوس‌ها باید از طریق گفتگو کلمه را حدس بزنند بدون آنکه شناسایی شوند. شهروندان باید جاسوس‌ها را پیدا کنند.',
+        back: 'بازگشت',
+        settingsTitle: 'تنظیمات',
+        language: 'زبان',
+        primaryColor: 'رنگ اصلی',
+        secondaryColor: 'رنگ ثانویه',
+        sound: 'افکت صدا',
+        vibration: 'لرزش',
+        setupTitle: 'راه‌اندازی بازی',
+        playerCount: 'تعداد بازیکنان',
+        spyCount: 'تعداد جاسوسان',
+        roundTime: 'زمان هر دور (دقیقه)',
+        rounds: 'تعداد دورها',
+        difficulty: 'سطح سختی',
+        easy: 'آسان',
+        medium: 'متوسط',
+        hard: 'سخت',
+        extreme: 'فوق‌العاده سخت',
+        start: 'شروع بازی',
+        tapReveal: 'برای دیدن نقش لمس کنید',
+        tapNext: 'برای نفر بعدی لمس کنید',
+        revealTitle: 'نمایش نقش',
+        revealInstr: 'هر بازیکن روی کارت خود بزند تا نقشش را ببیند. سپس دستگاه را به نفر بعد بدهید.',
+        youAreSpy: 'تو جاسوسی',
+        yourWord: 'کلمه تو:',
+        timerTitle: 'بحث کنید',
+        vote: 'رأی',
+        voteTitle: 'رأی‌گیری',
+        voteInstructions: 'بازیکنان مظنون به جاسوسی را انتخاب کرده و ارسال کنید.',
+        showResult: 'نمایش نتیجه',
+        resultTitle: 'نتیجه',
+        citizensWin: 'شهروندان پیروز شدند! همه جاسوس‌ها شناسایی شدند.',
+        spiesWin: 'جاسوسان پیروز شدند! آن‌ها مخفی ماندند.',
+        draw: 'بازی مساوی شد.',
+        backToMenu: 'بازگشت به منو',
+        noMoreWords: 'هیچ کلمه استفاده‌نشده‌ای باقی نمانده است. لطفاً کلمات را از تنظیمات بازنشانی کنید.',
       }
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // GAME STATE
-    // ═══════════════════════════════════════════════════════════════
-    let gameState = {
-      language: 'en',
-      playersCount: 4,
-      gameDuration: 180,
-      primaryColor: '#B3E5FC',
-      secondaryColor: '#FFFFFF',
-      currentScreen: 'language',
-      currentPlayerIndex: 0,
-      spyIndex: -1,
-      currentWord: '',
-      usedWords: [],
-      votes: [],
-      roleRevealed: false,
-      timerInterval: null,
-      timeRemaining: 180
-    };
+    /* Utility functions */
+    function updateTheme() {
+      document.documentElement.style.setProperty('--primary', state.primary);
+      document.documentElement.style.setProperty('--secondary', state.secondary);
+    }
 
-    const defaultConfig = {
-      game_title: 'Shadow Ops'
-    };
+    function updateLanguage() {
+      const dict = i18n[state.language];
+      // Update static texts
+      document.getElementById('title').textContent = dict.title;
+      document.getElementById('continue-btn').textContent = dict.continue;
+      document.getElementById('guide-btn').textContent = dict.guide;
+      document.getElementById('settings-btn').textContent = dict.settings;
+      document.getElementById('guide-title').textContent = dict.guideTitle;
+      document.getElementById('guide-text').textContent = dict.guideText;
+      document.getElementById('back-from-guide').textContent = dict.back;
+      document.getElementById('settings-title').textContent = dict.settingsTitle;
+      document.getElementById('lang-label').textContent = dict.language;
+      document.getElementById('primary-label').textContent = dict.primaryColor;
+      document.getElementById('secondary-label').textContent = dict.secondaryColor;
+      document.getElementById('sound-label').textContent = dict.sound;
+      document.getElementById('vibration-label').textContent = dict.vibration;
+      document.getElementById('back-from-settings').textContent = dict.back;
+      document.getElementById('setup-title').textContent = dict.setupTitle;
+      document.getElementById('player-count-label').textContent = dict.playerCount;
+      document.getElementById('spy-count-label').textContent = dict.spyCount;
+      document.getElementById('round-time-label').textContent = dict.roundTime;
+      document.getElementById('rounds-label').textContent = dict.rounds;
+      document.getElementById('difficulty-label').textContent = dict.difficulty;
+      document.getElementById('difficulty').options[0].textContent = dict.easy;
+      document.getElementById('difficulty').options[1].textContent = dict.medium;
+      document.getElementById('difficulty').options[2].textContent = dict.hard;
+      document.getElementById('difficulty').options[3].textContent = dict.extreme;
+      document.getElementById('start-game').textContent = dict.start;
+      document.getElementById('reveal-title').textContent = dict.revealTitle;
+      document.getElementById('role-front').textContent = dict.tapReveal;
+      document.getElementById('role-instructions').textContent = dict.revealInstr;
+      document.getElementById('timer-title').textContent = dict.timerTitle;
+      document.getElementById('vote-button').textContent = dict.vote;
+      document.getElementById('vote-title').textContent = dict.voteTitle;
+      document.getElementById('show-result-btn').textContent = dict.showResult;
+      document.getElementById('result-title').textContent = dict.resultTitle;
+      document.getElementById('back-to-menu').textContent = dict.backToMenu;
 
-    let config = { ...defaultConfig };
-
-    // ═══════════════════════════════════════════════════════════════
-    // ELEMENT SDK INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════
-    if (window.elementSdk) {
-      window.elementSdk.init({
-        defaultConfig,
-        onConfigChange: async (newConfig) => {
-          config = { ...defaultConfig, ...newConfig };
-          const titleEl = document.querySelector('#languageScreen h1');
-          if (titleEl) {
-            titleEl.textContent = config.game_title || defaultConfig.game_title;
-          }
-        },
-        mapToCapabilities: (cfg) => ({
-          recolorables: [],
-          borderables: [],
-          fontEditable: undefined,
-          fontSizeable: undefined
-        }),
-        mapToEditPanelValues: (cfg) => new Map([
-          ['game_title', cfg.game_title || defaultConfig.game_title]
-        ])
+      // Set direction and text alignment based on language
+      document.documentElement.setAttribute('dir', state.language === 'fa' ? 'rtl' : 'ltr');
+      // LTR/RTL friendly transform origins
+      document.querySelectorAll('.page').forEach(p => {
+        p.style.transformOrigin = (state.language === 'fa') ? 'right center' : 'left center';
       });
+      // apply text alignment to dynamic elements if needed
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PARTICLES SYSTEM
-    // ═══════════════════════════════════════════════════════════════
-    function createParticles() {
-      const container = document.getElementById('particles');
-      container.innerHTML = '';
-      for (let i = 0; i < 30; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.top = Math.random() * 100 + '%';
-        particle.style.animationDelay = Math.random() * 8 + 's';
-        particle.style.opacity = 0.2 + Math.random() * 0.3;
-        particle.style.width = (3 + Math.random() * 4) + 'px';
-        particle.style.height = particle.style.width;
-        container.appendChild(particle);
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // SCREEN TRANSITIONS
-    // ═══════════════════════════════════════════════════════════════
-    function showScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(s => {
-        s.classList.remove('active');
-      });
-      setTimeout(() => {
-        document.getElementById(screenId).classList.add('active');
-      }, 50);
-      gameState.currentScreen = screenId.replace('Screen', '');
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // LANGUAGE SELECTION
-    // ═══════════════════════════════════════════════════════════════
-    function selectLanguage(lang) {
-      gameState.language = lang;
-      document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
-      document.body.className = lang === 'fa' 
-        ? 'h-full bg-gradient font-persian overflow-hidden' 
-        : 'h-full bg-gradient font-english overflow-hidden';
-      
-      updateTranslations();
-      showScreen('setupScreen');
-    }
-
-    function updateTranslations() {
-      const t = TRANSLATIONS[gameState.language];
-      
-      document.getElementById('setupTitle').textContent = t.gameSetup;
-      document.getElementById('labelPlayers').textContent = t.players;
-      document.getElementById('labelDuration').textContent = t.duration;
-      document.getElementById('labelColors').textContent = t.themeColors;
-      document.getElementById('labelPrimary').textContent = t.primary;
-      document.getElementById('labelSecondary').textContent = t.secondary;
-      document.getElementById('btnStart').textContent = t.startGame;
-      document.getElementById('btnBackLang').textContent = t.changeLanguage;
-      document.getElementById('tapText').textContent = t.tapToSee;
-      document.getElementById('btnConfirm').textContent = t.confirmPass;
-      document.getElementById('discussTitle').textContent = t.discussionTime;
-      document.getElementById('hintLabel').textContent = t.secretWord;
-      document.getElementById('btnEndDiscussion').textContent = t.startVoting;
-      document.getElementById('voteTitle').textContent = t.voteForSpy;
-      document.getElementById('voteSubtitle').textContent = t.whoIsSpy;
-      document.getElementById('btnConfirmVote').textContent = t.confirmVotes;
-      document.getElementById('revealSpyLabel').textContent = t.spyWas;
-      document.getElementById('revealWordLabel').textContent = t.wordWas;
-      document.getElementById('btnPlayAgain').textContent = t.playAgain;
-      document.getElementById('btnNewSetup').textContent = t.newSetup;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // SETUP CONTROLS
-    // ═══════════════════════════════════════════════════════════════
-    function updatePlayerCount(value) {
-      gameState.playersCount = parseInt(value);
-      document.getElementById('playerCountDisplay').textContent = value;
-    }
-
-    function updateDuration(value) {
-      gameState.gameDuration = parseInt(value);
-      const mins = Math.floor(value / 60);
-      const secs = value % 60;
-      document.getElementById('durationDisplay').textContent = 
-        `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    function updatePrimaryColor(color) {
-      gameState.primaryColor = color;
-      document.documentElement.style.setProperty('--primary', color);
-    }
-
-    function updateSecondaryColor(color) {
-      gameState.secondaryColor = color;
-      document.documentElement.style.setProperty('--secondary', color);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // GAME START
-    // ═══════════════════════════════════════════════════════════════
-    function startGame() {
-      // Reset game
-      gameState.currentPlayerIndex = 0;
-      gameState.votes = new Array(gameState.playersCount).fill(-1);
-      gameState.roleRevealed = false;
-      
-      // Select spy randomly
-      gameState.spyIndex = Math.floor(Math.random() * gameState.playersCount);
-      
-      // Select word
-      const availableWords = WORDS[gameState.language].filter(w => !gameState.usedWords.includes(w));
-      if (availableWords.length === 0) {
-        gameState.usedWords = [];
-      }
-      const wordList = availableWords.length > 0 ? availableWords : WORDS[gameState.language];
-      gameState.currentWord = wordList[Math.floor(Math.random() * wordList.length)];
-      gameState.usedWords.push(gameState.currentWord);
-      
-      setupRoleScreen();
-      showScreen('roleScreen');
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ROLE REVEAL
-    // ═══════════════════════════════════════════════════════════════
-    function setupRoleScreen() {
-      const t = TRANSLATIONS[gameState.language];
-      document.getElementById('playerLabel').textContent = 
-        `${t.player} ${gameState.currentPlayerIndex + 1}`;
-      document.getElementById('tapPrompt').classList.remove('hidden');
-      document.getElementById('roleRevealed').classList.add('hidden');
-      document.getElementById('btnConfirm').classList.add('hidden');
-      
-      const roleCard = document.getElementById('roleCard');
-      roleCard.classList.remove('glow-danger', 'glow-success', 'shake');
-      roleCard.classList.add('breathing');
-      
-      gameState.roleRevealed = false;
-    }
-
-    function revealRole() {
-      if (gameState.roleRevealed) return;
-      gameState.roleRevealed = true;
-      
-      const t = TRANSLATIONS[gameState.language];
-      const isSpy = gameState.currentPlayerIndex === gameState.spyIndex;
-      const roleCard = document.getElementById('roleCard');
-      
-      roleCard.classList.remove('breathing');
-      document.getElementById('tapPrompt').classList.add('hidden');
-      document.getElementById('roleRevealed').classList.remove('hidden');
-      
-      const roleIcon = document.getElementById('roleIcon');
-      const roleText = document.getElementById('roleText');
-      const wordText = document.getElementById('wordText');
-      
-      if (isSpy) {
-        roleIcon.textContent = '🕵️';
-        roleText.textContent = t.youAreSpy;
-        roleText.style.color = '#FF1744';
-        wordText.textContent = t.hidden;
-        wordText.style.color = '#FF1744';
-        
-        roleCard.classList.add('glow-danger', 'shake');
-        
-        setTimeout(() => {
-          roleCard.classList.remove('shake');
-        }, 500);
-      } else {
-        roleIcon.textContent = '👤';
-        roleText.textContent = t.youAreNormal;
-        roleText.style.color = gameState.primaryColor;
-        wordText.textContent = gameState.currentWord;
-        wordText.style.color = '#FFFFFF';
-        
-        roleCard.classList.add('glow-success');
-      }
-      
-      document.getElementById('roleRevealed').classList.add('spy-reveal');
-      
-      setTimeout(() => {
-        document.getElementById('btnConfirm').classList.remove('hidden');
-        document.getElementById('btnConfirm').classList.add('slide-up');
-      }, 400);
-    }
-
-    function confirmRole() {
-      gameState.currentPlayerIndex++;
-      
-      if (gameState.currentPlayerIndex >= gameState.playersCount) {
-        startDiscussion();
-      } else {
-        setupRoleScreen();
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // DISCUSSION TIMER
-    // ═══════════════════════════════════════════════════════════════
-    function startDiscussion() {
-      showScreen('timerScreen');
-      gameState.timeRemaining = gameState.gameDuration;
-      
-      document.getElementById('hintWord').textContent = gameState.currentWord;
-      updateTimerDisplay();
-      
-      const circumference = 2 * Math.PI * 70;
-      document.getElementById('timerRing').style.strokeDasharray = circumference;
-      
-      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-      
-      gameState.timerInterval = setInterval(() => {
-        gameState.timeRemaining--;
-        updateTimerDisplay();
-        
-        const progress = gameState.timeRemaining / gameState.gameDuration;
-        const offset = circumference * (1 - progress);
-        document.getElementById('timerRing').style.strokeDashoffset = offset;
-        
-        if (gameState.timeRemaining <= 30) {
-          document.getElementById('timerRing').style.stroke = '#FF1744';
+    // --- Sound (Web Audio, fully self-contained) ---
+    const SFX = (() => {
+      let ctx = null;
+      let master = null;
+      let unlocked = false;
+      function ensure() {
+        if (!state.sound) return null;
+        if (!ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          ctx = new AC();
+          master = ctx.createGain();
+          master.gain.value = 0.35;
+          master.connect(ctx.destination);
         }
-        
-        if (gameState.timeRemaining <= 0) {
-          clearInterval(gameState.timerInterval);
-          endDiscussion();
+        return ctx;
+      }
+      async function unlock() {
+        if (unlocked) return;
+        const c = ensure();
+        if (!c) return;
+        if (c.state === 'suspended') {
+          try { await c.resume(); } catch (_) {}
+        }
+        // tiny silent blip to unlock on iOS
+        const o = c.createOscillator();
+        const g = c.createGain();
+        g.gain.value = 0.0001;
+        o.frequency.value = 440;
+        o.connect(g); g.connect(master);
+        o.start(); o.stop(c.currentTime + 0.01);
+        unlocked = true;
+      }
+
+      function glassPing({ freq = 880, dur = 0.12, gain = 0.20, detune = 6 } = {}) {
+        const c = ensure();
+        if (!c) return;
+        const t0 = c.currentTime;
+        const o1 = c.createOscillator();
+        const o2 = c.createOscillator();
+        const g = c.createGain();
+        const bp = c.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(freq, t0);
+        bp.Q.setValueAtTime(8, t0);
+        o1.type = 'sine';
+        o2.type = 'triangle';
+        o1.frequency.setValueAtTime(freq, t0);
+        o2.frequency.setValueAtTime(freq * 1.01, t0);
+        o1.detune.setValueAtTime(-detune, t0);
+        o2.detune.setValueAtTime(detune, t0);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        o1.connect(bp); o2.connect(bp);
+        bp.connect(g);
+        g.connect(master);
+        o1.start(t0);
+        o2.start(t0);
+        o1.stop(t0 + dur + 0.02);
+        o2.stop(t0 + dur + 0.02);
+      }
+
+      function click() { glassPing({ freq: 1040, gain: 0.18, dur: 0.10 }); }
+      function flip() { glassPing({ freq: 740, gain: 0.22, dur: 0.14 }); }
+      function warn() { glassPing({ freq: 520, gain: 0.24, dur: 0.12 }); }
+      function tick() { glassPing({ freq: 680, gain: 0.14, dur: 0.07 }); }
+
+      return { ensure, unlock, click, flip, warn, tick };
+    })();
+
+    function saveSettings() {
+      localStorage.setItem('spyparty_language', state.language);
+      localStorage.setItem('spyparty_primary', state.primary);
+      localStorage.setItem('spyparty_secondary', state.secondary);
+      localStorage.setItem('spyparty_sound', state.sound);
+      localStorage.setItem('spyparty_vibration', state.vibration);
+      localStorage.setItem('spyparty_words', JSON.stringify(state.wordsUsed));
+    }
+
+    function showPage(id) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    function rangeRandom(max) {
+      // secure random integer [0, max)
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      return array[0] % max;
+    }
+
+    function pickWord() {
+      const lang = state.language;
+      const diff = state.difficulty;
+      const bank = state.wordBank[lang][diff];
+      if (!state.wordsUsed[lang]) state.wordsUsed[lang] = {};
+      if (!state.wordsUsed[lang][diff]) state.wordsUsed[lang][diff] = [];
+      const used = new Set(state.wordsUsed[lang][diff]);
+      const available = bank.filter(w => !used.has(w));
+      if (available.length === 0) {
+        alert(i18n[state.language].noMoreWords);
+        return null;
+      }
+      const idx = rangeRandom(available.length);
+      const word = available[idx];
+      state.wordsUsed[lang][diff].push(word);
+      saveSettings();
+      return word;
+    }
+
+    /* Role assignment */
+    function assignRoles() {
+      state.roles = [];
+      const word = pickWord();
+      if (!word) return;
+      // push spies as false for citizens, true for spy
+      const arr = Array(state.playerCount).fill(false);
+      let spiesAssigned = 0;
+      while (spiesAssigned < state.spyCount) {
+        const idx = rangeRandom(state.playerCount);
+        if (!arr[idx]) {
+          arr[idx] = true;
+          spiesAssigned++;
+        }
+      }
+      state.roles = arr.map(isSpy => ({ isSpy, word: isSpy ? null : word }));
+    }
+
+    // --- Setup sliders + constraints ---
+    const setupUI = {
+      pc: null, sc: null, rt: null, rd: null,
+      pcV: null, scV: null, rtV: null, rdV: null,
+    };
+
+    function maxSpiesForPlayers(playerCount) {
+      // do not allow spies > citizens
+      return Math.max(1, Math.floor(playerCount / 2));
+    }
+
+    function syncSetupUI() {
+      const pc = parseInt(setupUI.pc.value);
+      const maxSpies = maxSpiesForPlayers(pc);
+      setupUI.sc.max = String(maxSpies);
+      if (parseInt(setupUI.sc.value) > maxSpies) setupUI.sc.value = String(maxSpies);
+
+      setupUI.pcV.textContent = String(pc);
+      setupUI.scV.textContent = String(setupUI.sc.value);
+      setupUI.rtV.textContent = String(setupUI.rt.value) + (state.language === 'fa' ? ' دقیقه' : ' min');
+      setupUI.rdV.textContent = String(setupUI.rd.value);
+    }
+
+    /* Event Handlers */
+    function initEventHandlers() {
+      // unlock audio on first user gesture
+      window.addEventListener('pointerdown', () => SFX.unlock(), { once: true, passive: true });
+
+      // global gear button
+      document.getElementById('gear-btn').addEventListener('click', () => {
+        openSettings();
+      });
+
+      // Main menu buttons
+      document.getElementById('continue-btn').addEventListener('click', () => {
+        SFX.click();
+        showPage('setup-page');
+      });
+      document.getElementById('guide-btn').addEventListener('click', () => {
+        SFX.click();
+        showPage('guide-page');
+      });
+      document.getElementById('settings-btn').addEventListener('click', () => {
+        SFX.click();
+        openSettings();
+      });
+      // Back buttons
+      document.getElementById('back-from-guide').addEventListener('click', () => showPage('main-menu'));
+      document.getElementById('back-from-settings').addEventListener('click', () => showPage('main-menu'));
+      // Settings interactions
+      document.getElementById('language-select').addEventListener('change', e => {
+        state.language = e.target.value;
+        updateLanguage();
+        syncSetupUI();
+        saveSettings();
+      });
+      document.getElementById('primary-color').addEventListener('input', e => {
+        state.primary = e.target.value;
+        updateTheme();
+        saveSettings();
+      });
+      document.getElementById('secondary-color').addEventListener('input', e => {
+        state.secondary = e.target.value;
+        updateTheme();
+        saveSettings();
+      });
+      // Toggle controls
+      document.getElementById('sound-toggle').addEventListener('click', e => {
+        state.sound = !state.sound;
+        e.currentTarget.classList.toggle('on', state.sound);
+        SFX.click();
+        saveSettings();
+      });
+      document.getElementById('vibration-toggle').addEventListener('click', e => {
+        state.vibration = !state.vibration;
+        e.currentTarget.classList.toggle('on', state.vibration);
+        SFX.click();
+        saveSettings();
+      });
+
+      // Setup sliders
+      setupUI.pc = document.getElementById('player-count');
+      setupUI.sc = document.getElementById('spy-count');
+      setupUI.rt = document.getElementById('round-time');
+      setupUI.rd = document.getElementById('rounds');
+      setupUI.pcV = document.getElementById('player-count-val');
+      setupUI.scV = document.getElementById('spy-count-val');
+      setupUI.rtV = document.getElementById('round-time-val');
+      setupUI.rdV = document.getElementById('rounds-val');
+
+      const onSlide = () => { syncSetupUI(); };
+      setupUI.pc.addEventListener('input', onSlide, { passive: true });
+      setupUI.sc.addEventListener('input', onSlide, { passive: true });
+      setupUI.rt.addEventListener('input', onSlide, { passive: true });
+      setupUI.rd.addEventListener('input', onSlide, { passive: true });
+      // Setup form
+      document.getElementById('start-game').addEventListener('click', () => {
+        SFX.click();
+        state.playerCount = parseInt(setupUI.pc.value);
+        state.spyCount = parseInt(setupUI.sc.value);
+        state.roundTime = parseInt(setupUI.rt.value);
+        state.maxRounds = parseInt(setupUI.rd.value);
+        state.difficulty = document.getElementById('difficulty').value;
+        state.currentRound = 1;
+        assignRoles();
+        state.currentPlayerIndex = 0;
+        showPage('role-page');
+        updateRoleView();
+      });
+      // Role reveal card handler
+      document.getElementById('role-card').addEventListener('click', () => {
+        const card = document.getElementById('role-card');
+        if (!card.classList.contains('flipped')) {
+          SFX.flip();
+          card.classList.add('flipped');
+          // Set content based on role
+          const role = state.roles[state.currentPlayerIndex];
+          const back = document.getElementById('role-back');
+          if (role.isSpy) {
+            card.classList.remove('citizen-theme');
+            card.classList.add('spy-theme');
+            back.innerHTML = '<div><div class="role-pill">' + i18n[state.language].youAreSpy + '</div><div style="opacity:.82">' + (state.language === 'fa' ? 'هیچ کلمه‌ای نداری.' : 'You have no word.') + '</div></div>';
+            card.classList.remove('spy-shake');
+            // restart shake
+            void card.offsetWidth;
+            card.classList.add('spy-shake');
+          } else {
+            card.classList.remove('spy-theme');
+            card.classList.add('citizen-theme');
+            back.innerHTML = '<div><div class="role-pill">' + i18n[state.language].yourWord + '</div><div style="font-size:1.65rem; letter-spacing:-0.02em">' + role.word + '</div></div>';
+          }
+          document.getElementById('role-front').textContent = i18n[state.language].tapNext;
+        } else {
+          SFX.click();
+          // Next player or start timer
+          card.classList.remove('flipped');
+          state.currentPlayerIndex++;
+          if (state.currentPlayerIndex >= state.playerCount) {
+            startTimer();
+          } else {
+            updateRoleView();
+          }
+        }
+      });
+      // Vote button
+      document.getElementById('vote-button').addEventListener('click', () => {
+        SFX.click();
+        showVotePage();
+      });
+      document.getElementById('show-result-btn').addEventListener('click', () => {
+        SFX.click();
+        computeResult();
+      });
+      document.getElementById('back-to-menu').addEventListener('click', () => {
+        SFX.click();
+        showPage('main-menu');
+      });
+    }
+
+    function openSettings() {
+      document.getElementById('language-select').value = state.language;
+      document.getElementById('primary-color').value = state.primary;
+      document.getElementById('secondary-color').value = state.secondary;
+      document.getElementById('sound-toggle').classList.toggle('on', state.sound);
+      document.getElementById('vibration-toggle').classList.toggle('on', state.vibration);
+      showPage('settings-page');
+    }
+
+    function updateRoleView() {
+      const front = document.getElementById('role-front');
+      front.textContent = i18n[state.language].tapReveal;
+      const back = document.getElementById('role-back');
+      back.textContent = '';
+      const card = document.getElementById('role-card');
+      card.classList.remove('spy-theme','citizen-theme','spy-shake');
+      document.getElementById('reveal-title').textContent = i18n[state.language].revealTitle + ' ' + (state.currentPlayerIndex + 1) + '/' + state.playerCount;
+    }
+
+    /* Timer functions */
+    function startTimer() {
+      showPage('timer-page');
+      const totalSeconds = state.roundTime * 60;
+      let elapsed = 0;
+      let warned30 = false;
+      const ring = document.getElementById('timer-ring');
+      const circumference = 2 * Math.PI * 45;
+      ring.style.strokeDasharray = circumference;
+      ring.style.strokeDashoffset = '0';
+      const updateColor = (secRemaining) => {
+        if (secRemaining <= 10) {
+          ring.style.stroke = 'red';
+        } else if (secRemaining <= 30) {
+          ring.style.stroke = 'orange';
+        } else {
+          ring.style.stroke = state.secondary;
+        }
+      };
+      updateColor(totalSeconds);
+      state.timerInterval = setInterval(() => {
+        elapsed++;
+        const remaining = totalSeconds - elapsed;
+        const offset = circumference * (elapsed / totalSeconds);
+        ring.style.strokeDashoffset = offset;
+        updateColor(remaining);
+        if (!warned30 && remaining <= 30 && remaining > 10) {
+          warned30 = true;
+          SFX.warn();
+        }
+        if (remaining <= 10 && remaining > 0) {
+          SFX.tick();
+          if (state.vibration && navigator.vibrate) navigator.vibrate(18);
+        }
+        if (remaining <= 0) {
+          clearInterval(state.timerInterval);
+          showVotePage();
         }
       }, 1000);
-      
+      // show vote button after timer ends; we also allow manual early vote by pressing the button (makes interactive)
       setTimeout(() => {
-        document.getElementById('btnEndDiscussion').classList.remove('hidden');
-      }, 5000);
+        document.getElementById('vote-button').classList.add('show');
+      }, 500);
     }
 
-    function updateTimerDisplay() {
-      const mins = Math.floor(gameState.timeRemaining / 60);
-      const secs = gameState.timeRemaining % 60;
-      document.getElementById('timerDisplay').textContent = 
-        `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    function endDiscussion() {
-      if (gameState.timerInterval) {
-        clearInterval(gameState.timerInterval);
-      }
-      startVoting();
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // VOTING
-    // ═══════════════════════════════════════════════════════════════
-    function startVoting() {
-      showScreen('votingScreen');
-      gameState.currentPlayerIndex = 0;
-      gameState.votes = new Array(gameState.playersCount).fill(-1);
-      
-      const grid = document.getElementById('votingGrid');
-      grid.innerHTML = '';
-      
-      const t = TRANSLATIONS[gameState.language];
-      
-      for (let i = 0; i < gameState.playersCount; i++) {
-        const card = document.createElement('button');
-        card.className = 'glass-card rounded-2xl p-6 cursor-pointer scale-in transition-all duration-300 hover:scale-105';
-        card.style.animationDelay = `${i * 0.1}s`;
-        card.innerHTML = `
-          <div class="text-4xl mb-2">👤</div>
-          <div class="text-lg font-semibold text-white">${t.player} ${i + 1}</div>
-          <div class="text-sm text-white/50 mt-1 vote-count" id="votes-${i}">0 votes</div>
-        `;
-        card.onclick = () => castVote(i);
-        card.id = `player-card-${i}`;
-        grid.appendChild(card);
-      }
-      
-      document.getElementById('btnConfirmVote').classList.add('hidden');
-      updateVotingUI();
-    }
-
-    function castVote(playerIndex) {
-      gameState.votes[gameState.currentPlayerIndex] = playerIndex;
-      gameState.currentPlayerIndex++;
-      
-      updateVotingUI();
-      
-      if (gameState.currentPlayerIndex >= gameState.playersCount) {
-        document.getElementById('btnConfirmVote').classList.remove('hidden');
-        document.getElementById('btnConfirmVote').classList.add('slide-up');
-      }
-    }
-
-    function updateVotingUI() {
-      const voteCounts = new Array(gameState.playersCount).fill(0);
-      gameState.votes.forEach(v => {
-        if (v >= 0) voteCounts[v]++;
-      });
-      
-      for (let i = 0; i < gameState.playersCount; i++) {
-        const voteEl = document.getElementById(`votes-${i}`);
-        if (voteEl) {
-          voteEl.textContent = `${voteCounts[i]} votes`;
-        }
-        
-        const card = document.getElementById(`player-card-${i}`);
-        if (card) {
-          if (voteCounts[i] > 0) {
-            card.classList.add('voted');
+    function showVotePage() {
+      clearInterval(state.timerInterval);
+      document.getElementById('vote-button').classList.remove('show');
+      showPage('vote-page');
+      // Build voting list
+      const list = document.getElementById('vote-list');
+      list.innerHTML = '';
+      state.votes = {};
+      for (let i = 0; i < state.playerCount; i++) {
+        const card = document.createElement('div');
+        card.className = 'vote-card glass';
+        card.textContent = (state.language === 'fa' ? 'بازیکن ' : 'Player ') + (i + 1);
+        card.addEventListener('click', () => {
+          const pid = i;
+          if (state.votes[pid]) {
+            delete state.votes[pid];
+            card.classList.remove('selected');
           } else {
-            card.classList.remove('voted');
+            state.votes[pid] = true;
+            card.classList.add('selected');
           }
-        }
+        });
+        list.appendChild(card);
       }
-      
-      const t = TRANSLATIONS[gameState.language];
-      document.getElementById('voteSubtitle').textContent = 
-        gameState.currentPlayerIndex < gameState.playersCount
-          ? `${t.player} ${gameState.currentPlayerIndex + 1} - ${t.whoIsSpy}`
-          : t.selectAll;
+      document.getElementById('vote-title').textContent = i18n[state.language].voteInstructions;
     }
 
-    function confirmVotes() {
-      const voteCounts = new Array(gameState.playersCount).fill(0);
-      gameState.votes.forEach(v => {
-        if (v >= 0) voteCounts[v]++;
-      });
-      
-      let maxVotes = 0;
-      let mostVoted = -1;
-      voteCounts.forEach((count, idx) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          mostVoted = idx;
-        }
-      });
-      
-      showResult(mostVoted === gameState.spyIndex);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // RESULT SCREEN
-    // ═══════════════════════════════════════════════════════════════
-    function showResult(playersWon) {
-      showScreen('resultScreen');
-      
-      const t = TRANSLATIONS[gameState.language];
-      const resultCard = document.getElementById('resultCard');
-      const resultIcon = document.getElementById('resultIcon');
-      const resultTitle = document.getElementById('resultTitle');
-      const resultMessage = document.getElementById('resultMessage');
-      
-      if (playersWon) {
-        resultIcon.textContent = '🎉';
-        resultTitle.textContent = t.playersFound;
-        resultTitle.style.color = '#00E676';
-        resultMessage.textContent = '';
-        resultCard.classList.add('glow-success');
-        resultCard.classList.remove('glow-danger');
+    function computeResult() {
+      const selected = Object.keys(state.votes).map(Number);
+      let spiesCaught = 0;
+      for (const idx of selected) {
+        if (state.roles[idx].isSpy) spiesCaught++;
+      }
+      let resultMsg;
+      if (spiesCaught >= state.spyCount) {
+        resultMsg = i18n[state.language].citizensWin;
+      } else if (spiesCaught >= state.spyCount / 2) {
+        resultMsg = i18n[state.language].draw;
       } else {
-        resultIcon.textContent = '🕵️';
-        resultTitle.textContent = t.spyWins;
-        resultTitle.style.color = '#FF1744';
-        resultMessage.textContent = '';
-        resultCard.classList.add('glow-danger');
-        resultCard.classList.remove('glow-success');
+        resultMsg = i18n[state.language].spiesWin;
       }
-      
-      document.getElementById('revealSpy').textContent = `${t.player} ${gameState.spyIndex + 1}`;
-      document.getElementById('revealWord').textContent = gameState.currentWord;
+      document.getElementById('result-message').textContent = resultMsg;
+      showPage('result-page');
     }
 
-    function playAgain() {
-      startGame();
+    /* Init function */
+    function init() {
+      updateTheme();
+      updateLanguage();
+      // init slider UI defaults + constraint
+      setupUI.pc = document.getElementById('player-count');
+      setupUI.sc = document.getElementById('spy-count');
+      setupUI.rt = document.getElementById('round-time');
+      setupUI.rd = document.getElementById('rounds');
+      setupUI.pcV = document.getElementById('player-count-val');
+      setupUI.scV = document.getElementById('spy-count-val');
+      setupUI.rtV = document.getElementById('round-time-val');
+      setupUI.rdV = document.getElementById('rounds-val');
+      syncSetupUI();
+      initEventHandlers();
     }
 
-    function newSetup() {
-      showScreen('setupScreen');
-    }
-
-    function goToLanguage() {
-      showScreen('languageScreen');
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════
-    createParticles();
-    
-    // Ripple effect for buttons
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('.glass-button')) {
-        const btn = e.target.closest('.glass-button');
-        const rect = btn.getBoundingClientRect();
-        const ripple = document.createElement('span');
-        ripple.className = 'ripple';
-        ripple.style.left = (e.clientX - rect.left) + 'px';
-        ripple.style.top = (e.clientY - rect.top) + 'px';
-        btn.style.position = 'relative';
-        btn.style.overflow = 'hidden';
-        btn.appendChild(ripple);
-        setTimeout(() => ripple.remove(), 600);
-      }
-    });
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
