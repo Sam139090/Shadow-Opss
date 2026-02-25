@@ -1,1298 +1,1711 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spy Party</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Shadow Ops</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /*
-      Spy Party Game
-      ----------------
-      This single‑file web application implements a browser based party game inspired
-      by the classic “Spyfall/Spy Party” genre. The design language emulates
-      Apple’s Liquid Glass aesthetic using modern CSS features such as
-      backdrop-filter, blur, saturation and dynamic shadows. Everything is kept
-      self‑contained: no external libraries, fonts or images. All interactive
-      components are pure HTML/CSS/JS.
+    body { box-sizing: border-box; }
+    @font-face {
+      font-family: 'Vazirmatn';
+      src: url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-Regular.woff2') format('woff2');
+      font-weight: 400;
+    }
+    * { -webkit-tap-highlight-color: transparent; user-select: none; }
 
-      Features implemented include:
-      • Glassmorphic theme with configurable primary/secondary colours
-      • Responsive layout for desktop and mobile
-      • Multilingual support (English and Persian) with dynamic RTL/LTR switch
-      • Persistent settings stored in localStorage
-      • Setup page allowing players/rounds/difficulty selection
-      • Cryptographically secure word selection with memory of used words
-      • Role reveal with 3D card flip animation
-      • Countdown timer with progress ring and warning cues
-      • Simple voting mechanic to decide winners
-
-      Given the complexity of a full production game, some details (such as
-      thousands of words per difficulty) are represented by small sample lists.
-      Expanding the word bank is a matter of adding more strings to the arrays
-      defined in `wordBank` below. The architecture is modular and organised
-      around state‑driven view rendering.
-    */
-
-    /* Root variables for colours and typography */
     :root {
-      --primary: #d8e3e7;
-      --secondary: #8ec5fc;
-      --text-color: #0a0a0a;
-      --bg-blur: 40px;
-      --card-blur: 25px;
-      --float-blur: 15px;
-      --shadow-color: rgba(0, 0, 0, 0.15);
-      --shadow-strong: rgba(0,0,0,0.22);
-      --glass-border: rgba(255,255,255,0.35);
-      --glass-fill: rgba(255,255,255,0.22);
-      --glass-fill-2: rgba(255,255,255,0.14);
-      --ui-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-      --spring-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
-      --fade-ease: ease-in-out;
-      --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      --primary: #B3E5FC;
+      --secondary: #FFFFFF;
+      --accent: #00E5FF;
+      --glass-bg: rgba(255, 255, 255, 0.1);
+      --glass-border: rgba(255, 255, 255, 0.2);
     }
 
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: var(--primary);
-      font-family: var(--font-family);
-      color: var(--text-color);
-    }
+    .font-persian { font-family: 'Vazirmatn', 'Tahoma', sans-serif; }
+    .font-english { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; }
 
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: relative;
-    }
-
-    /* Background blur layer */
-    #bg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background:
-        radial-gradient(1200px 800px at 20% 20%, color-mix(in srgb, var(--secondary) 50%, white 50%) 0%, transparent 60%),
-        radial-gradient(900px 700px at 80% 30%, color-mix(in srgb, var(--primary) 55%, white 45%) 0%, transparent 55%),
-        radial-gradient(900px 900px at 50% 90%, color-mix(in srgb, var(--secondary) 35%, white 65%) 0%, transparent 60%),
-        linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0.08));
-      backdrop-filter: blur(var(--bg-blur)) saturate(180%);
-      z-index: -3;
-    }
-
-    /* Animated floating glass blobs (transform-only) */
-    .blob {
-      position: absolute;
-      width: 420px;
-      height: 420px;
-      border-radius: 50%;
-      opacity: 0.55;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0.1) 55%, transparent 65%);
-      mix-blend-mode: overlay;
-      transform: translate3d(0,0,0);
-      will-change: transform;
-      pointer-events: none;
-      z-index: -2;
-      animation: floaty 10s var(--fade-ease) infinite alternate;
-    }
-    .blob.b2 { width: 520px; height: 520px; opacity: 0.42; animation-duration: 13s; }
-    .blob.b3 { width: 360px; height: 360px; opacity: 0.48; animation-duration: 11s; }
-    @keyframes floaty {
-      from { transform: translate3d(-10px, -8px, 0) scale(1); }
-      to   { transform: translate3d(12px, 10px, 0) scale(1.03); }
-    }
-
-    /* Container for pages */
-    #app {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-    }
-
-    /* Common glass card */
     .glass {
-      background: linear-gradient(180deg, var(--glass-fill), var(--glass-fill-2));
-      box-shadow:
-        0 22px 45px rgba(0,0,0,0.12),
-        0 4px 16px rgba(0,0,0,0.10);
-      backdrop-filter: blur(var(--card-blur)) saturate(180%);
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      position: relative;
-      overflow: hidden;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.1);
     }
-    .glass::before {
-      content: "";
+
+    .glass-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.4),
+        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+    }
+
+    .glass-button {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .glass-button:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5),
+        0 0 20px var(--primary);
+    }
+
+    .glass-button:active { transform: translateY(1px) scale(0.98); }
+
+    .glow-primary { box-shadow: 0 0 40px var(--primary), 0 0 80px rgba(179, 229, 252, 0.3); }
+    .glow-accent { box-shadow: 0 0 30px var(--accent), 0 0 60px rgba(0, 229, 255, 0.2); }
+    .glow-danger { box-shadow: 0 0 40px #FF1744, 0 0 80px rgba(255, 23, 68, 0.4); }
+    .glow-success { box-shadow: 0 0 40px #00E676, 0 0 80px rgba(0, 230, 118, 0.4); }
+
+    .breathing { animation: breathe 3s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { opacity: 0.7; transform: scale(1);} 50% { opacity: 1; transform: scale(1.02);} }
+
+    .float { animation: float 4s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0px);} 50% { transform: translateY(-10px);} }
+
+    .shake { animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+    @keyframes shake { 0%, 100% { transform: translateX(0);} 10%, 30%, 50%, 70%, 90% { transform: translateX(-4px);} 20%, 40%, 60%, 80% { transform: translateX(4px);} }
+
+    .pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+    @keyframes pulseGlow { 0%, 100% { filter: brightness(1);} 50% { filter: brightness(1.3);} }
+
+    .slide-up { animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(40px);} to { opacity: 1; transform: translateY(0);} }
+
+    .slide-down { animation: slideDown 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-40px);} to { opacity: 1; transform: translateY(0);} }
+
+    .scale-in { animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.8);} to { opacity: 1; transform: scale(1);} }
+
+    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0;} to { opacity: 1;} }
+
+    .fade-out { animation: fadeOut 0.3s ease-out forwards; }
+    @keyframes fadeOut { from { opacity: 1;} to { opacity: 0;} }
+
+    .timer-ring { stroke-dasharray: 440; stroke-dashoffset: 0; transform-origin: center; transform: rotate(-90deg); }
+
+    .particle {
       position: absolute;
-      inset: -2px;
-      background:
-        radial-gradient(600px 180px at 20% 10%, rgba(255,255,255,0.40), transparent 60%),
-        radial-gradient(500px 240px at 80% 0%, rgba(255,255,255,0.25), transparent 65%);
+      width: 4px;
+      height: 4px;
+      background: var(--primary);
+      border-radius: 50%;
       pointer-events: none;
-      mix-blend-mode: screen;
+      animation: particleFloat 8s ease-in-out infinite;
     }
 
-    .hidden {
-      display: none;
+    @keyframes particleFloat {
+      0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.3; }
+      25% { transform: translateY(-30px) translateX(10px) scale(1.2); opacity: 0.6; }
+      50% { transform: translateY(-60px) translateX(-10px) scale(0.8); opacity: 0.4; }
+      75% { transform: translateY(-30px) translateX(20px) scale(1.1); opacity: 0.5; }
     }
 
-    /* Button styling */
-    button {
-      cursor: pointer;
-      border: none;
+    .bg-gradient {
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 25%, #0f0f2f 50%, #1a1a3a 75%, #0a0a1a 100%);
+    }
+
+    .spy-reveal { animation: spyReveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes spyReveal {
+      0% { opacity: 0; transform: scale(0.5) rotateY(90deg); filter: blur(10px); }
+      50% { filter: blur(5px); }
+      100% { opacity: 1; transform: scale(1) rotateY(0deg); filter: blur(0); }
+    }
+
+    .word-reveal { animation: wordReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes wordReveal {
+      0% { opacity: 0; transform: translateY(20px) scale(0.9); filter: blur(8px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    .ripple { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.4); transform: scale(0); animation: rippleEffect 0.6s ease-out; pointer-events: none; }
+    @keyframes rippleEffect { to { transform: scale(4); opacity: 0; } }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
       outline: none;
-      padding: 12px 24px;
-      margin: 8px;
-      font-size: 1rem;
-      border-radius: 12px;
-      position: relative;
-      background: linear-gradient(145deg,
-        color-mix(in srgb, var(--primary) 70%, white 30%),
-        color-mix(in srgb, var(--secondary) 55%, white 45%));
-      color: rgba(0,0,0,0.9);
-      box-shadow: 0 18px 30px rgba(0,0,0,0.14);
-      transition: transform 180ms var(--ui-ease), filter 250ms var(--fade-ease), box-shadow 250ms var(--fade-ease);
-      will-change: transform;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      background: var(--primary);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 20px var(--primary);
+      transition: all 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-shadow: 0 0 30px var(--primary); }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 60px;
+      height: 60px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      background: transparent;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      box-shadow: 0 0 20px currentColor;
     }
 
-    button:hover { transform: scale(1.05); filter: saturate(1.06); }
-    button:active { transform: scale(0.96); }
+    .stagger-1 { animation-delay: 0.1s; }
+    .stagger-2 { animation-delay: 0.2s; }
+    .stagger-3 { animation-delay: 0.3s; }
+    .stagger-4 { animation-delay: 0.4s; }
+    .stagger-5 { animation-delay: 0.5s; }
 
-    button::after {
-      content: "";
+    .screen {
       position: absolute;
       inset: 0;
-      border-radius: inherit;
-      background: radial-gradient(220px 80px at 20% 15%, rgba(255,255,255,0.55), transparent 60%);
-      opacity: 0.55;
-      pointer-events: none;
-      transition: opacity 250ms var(--fade-ease);
-    }
-    button:hover::after { opacity: 0.75; }
-
-    /* Icon button (gear) */
-    .icon-btn {
-      position: absolute;
-      top: 18px;
-      right: 18px;
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0.16));
-      border: 1px solid rgba(255,255,255,0.35);
-      box-shadow: 0 20px 35px rgba(0,0,0,0.14);
-      backdrop-filter: blur(var(--float-blur)) saturate(180%);
-      z-index: 50;
-    }
-    .icon-btn svg {
-      width: 20px;
-      height: 20px;
-      opacity: 0.9;
-      transform: translateZ(0);
-      will-change: transform;
-      transition: transform 220ms var(--spring-ease);
-    }
-    .icon-btn:hover svg { transform: scale(1.08); }
-
-    /* Pages styles */
-    .page {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      padding: 20px;
-      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      transition: transform 350ms var(--ui-ease), opacity 350ms var(--fade-ease);
-      opacity: 0;
-      transform: translateX(100%);
-    }
-    .page.active {
-      opacity: 1;
-      transform: translateX(0);
-    }
-
-    /* Header style */
-    h1, h2, h3, p {
-      margin: 0.5em 0;
-      text-align: center;
-    }
-    h1 { font-size: clamp(2rem, 3vw, 2.6rem); letter-spacing: -0.02em; }
-    h2 { font-size: clamp(1.4rem, 2.4vw, 1.9rem); letter-spacing: -0.015em; }
-    p { opacity: 0.85; line-height: 1.5; max-width: 720px; }
-
-    /* Main menu */
-    #main-menu .buttons {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    /* Guide page style */
-    #guide-content {
-      max-width: 600px;
-      background: rgba(255,255,255,0.15);
       padding: 20px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.3);
-      box-shadow: 0 4px 30px var(--shadow-color);
-      backdrop-filter: blur(var(--card-blur)) saturate(180%);
-      overflow-y: auto;
-      max-height: 70vh;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .screen.active { opacity: 1; pointer-events: auto; }
+
+    .voted { border: 3px solid var(--accent) !important; box-shadow: 0 0 30px var(--accent) !important; }
+
+    /* Secondary color actually applied (fix) */
+    #playerCountDisplay, #durationDisplay, #spyCountDisplay { color: var(--secondary) !important; }
+
+    /* Settings UI */
+    .settings-btn {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 60;
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.08) 100%);
+      border: 1px solid rgba(255,255,255,0.25);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform 0.2s ease;
+    }
+    .settings-btn:active { transform: scale(0.97); }
+    .settings-gear {
+      font-size: 26px;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,0.55));
+      transform: translateZ(0);
     }
 
-    /* Settings list */
-    #settings-options {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 600px;
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 70;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
     }
-    .setting-row {
+    .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+
+    .settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin: 10px 0;
+      justify-content: center;
+      padding: 18px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
     }
-    .setting-row label {
-      flex: 1;
-    }
-    .setting-row input[type=color] {
-      width: 48px;
-      height: 32px;
-      border: none;
-      border-radius: 8px;
-      padding: 0;
-    }
+    .settings-modal.active { opacity: 1; pointer-events: auto; }
+
     .toggle {
+      width: 52px;
+      height: 30px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.22);
       position: relative;
-      width: 50px;
-      height: 28px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.4);
-      backdrop-filter: blur(var(--card-blur));
       cursor: pointer;
-      transition: background 250ms;
+      transition: all 0.2s ease;
     }
     .toggle::after {
       content: '';
       position: absolute;
       top: 4px;
       left: 4px;
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      background: white;
-      box-shadow: 0 2px 4px var(--shadow-color);
-      transition: transform 250ms;
-    }
-    .toggle.on {
       background: var(--secondary);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+      transition: all 0.2s ease;
     }
-    .toggle.on::after {
-      transform: translateX(22px);
-    }
+    .toggle.on { background: rgba(0,229,255,0.18); border-color: rgba(0,229,255,0.35); box-shadow: 0 0 26px rgba(0,229,255,0.18); }
+    .toggle.on::after { left: 26px; background: var(--accent); }
 
-    /* Setup form styling */
-    #setup-form {
-      display: flex;
-      flex-direction: column;
-      max-width: 400px;
-      width: 100%;
-    }
-    #setup-form label { margin: 0; }
-    #setup-form .field {
-      margin-top: 14px;
-      padding: 14px 14px 12px;
-    }
-    #setup-form .field.glass { border-radius: 18px; }
-    .field-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .field-head .value {
-      font-variant-numeric: tabular-nums;
-      opacity: 0.85;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.18);
-      border: 1px solid rgba(255,255,255,0.28);
-      backdrop-filter: blur(var(--float-blur));
-    }
+    .accordion-btn { width: 100%; }
+    .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
+    .accordion-content.open { max-height: 240px; }
 
-    #setup-form select {
-      width: 100%;
-      margin-top: 12px;
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(255,255,255,0.18);
-      backdrop-filter: blur(var(--float-blur)) saturate(180%);
-      outline: none;
-    }
-
-    input[type=range] {
-      width: 100%;
-      margin-top: 12px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: transparent;
-      height: 26px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08);
       cursor: pointer;
+      transition: transform 0.15s ease;
     }
-    input[type=range]::-webkit-slider-runnable-track {
-      height: 8px;
-      border-radius: 999px;
-      background: linear-gradient(90deg,
-        color-mix(in srgb, var(--secondary) 70%, white 30%),
-        rgba(255,255,255,0.25));
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 18px;
-      height: 18px;
-      margin-top: -5px;
-      border-radius: 50%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
-      border: 1px solid rgba(255,255,255,0.45);
-      box-shadow: 0 10px 18px rgba(0,0,0,0.18);
-    }
-    input[type=range]::-moz-range-track {
-      height: 8px;
-      border-radius: 999px;
-      background: linear-gradient(90deg,
-        color-mix(in srgb, var(--secondary) 70%, white 30%),
-        rgba(255,255,255,0.25));
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
-    }
-    input[type=range]::-moz-range-thumb {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
-      border: 1px solid rgba(255,255,255,0.45);
-      box-shadow: 0 10px 18px rgba(0,0,0,0.18);
-    }
+    .chip:active { transform: scale(0.98); }
+    .chip.selected { border-color: rgba(0,229,255,0.45); box-shadow: 0 0 22px rgba(0,229,255,0.18); }
 
-    /* Role reveal card */
-    #role-card {
-      width: 240px;
-      height: 320px;
-      perspective: 1200px;
-      margin: 20px auto;
-    }
-    .card-inner {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      transform-style: preserve-3d;
-      transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .card.flipped .card-inner {
-      transform: rotateY(180deg);
-    }
-    .card-face {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      backface-visibility: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 90;
+      padding: 12px 14px;
       border-radius: 16px;
-      background: linear-gradient(180deg,
-        rgba(255,255,255,0.32),
-        rgba(255,255,255,0.14));
-      backdrop-filter: blur(var(--card-blur)) saturate(200%);
-      border: 1px solid rgba(255,255,255,0.35);
-      box-shadow:
-        0 26px 70px rgba(0,0,0,0.18),
-        inset 0 1px 0 rgba(255,255,255,0.25);
-      font-size: 1.3rem;
-      text-align: center;
-      padding: 20px;
-      overflow: hidden;
-    }
-    .card-face::before {
-      content: "";
-      position: absolute;
-      inset: -2px;
-      background:
-        radial-gradient(260px 160px at 25% 15%, rgba(255,255,255,0.45), transparent 60%),
-        radial-gradient(220px 180px at 80% 85%, rgba(255,255,255,0.22), transparent 60%),
-        linear-gradient(120deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
-      pointer-events: none;
-      mix-blend-mode: screen;
-    }
-    .card-front { font-weight: 600; }
-    .card-back {
-      transform: rotateY(180deg);
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-    .role-pill {
-      display: inline-block;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.18);
-      border: 1px solid rgba(255,255,255,0.30);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
-      backdrop-filter: blur(var(--float-blur));
-      margin-bottom: 10px;
-      opacity: 0.92;
-    }
-    .spy-theme .card-back {
-      background:
-        radial-gradient(500px 220px at 50% 30%, rgba(255,0,80,0.18), transparent 60%),
-        linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.12));
-    }
-    .citizen-theme .card-back {
-      background:
-        radial-gradient(500px 220px at 50% 30%, rgba(20,210,170,0.16), transparent 60%),
-        linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.12));
-    }
-
-    /* Spy shake effect */
-    @keyframes spyshake {
-      0%   { transform: translate3d(0,0,0) rotate(0deg); }
-      15%  { transform: translate3d(-3px, 1px, 0) rotate(-1deg); }
-      30%  { transform: translate3d(4px, -1px, 0) rotate(1deg); }
-      45%  { transform: translate3d(-4px, 0px, 0) rotate(-1deg); }
-      60%  { transform: translate3d(3px, 1px, 0) rotate(1deg); }
-      75%  { transform: translate3d(-2px, -1px, 0) rotate(-0.5deg); }
-      100% { transform: translate3d(0,0,0) rotate(0deg); }
-    }
-    .spy-shake { animation: spyshake 600ms var(--spring-ease) 1; }
-
-    /* Timer styles */
-    #timer-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 20px;
-    }
-    #timer-svg {
-      width: 180px;
-      height: 180px;
-      transform: rotate(-90deg);
-    }
-    #vote-button {
-      margin-top: 20px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.20);
+      color: rgba(255,255,255,0.92);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.45);
       opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 350ms ease-in-out, transform 350ms ease-in-out;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      max-width: min(92vw, 520px);
+      text-align: center;
     }
-    #vote-button.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* Player voting list */
-    #vote-list {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 20px;
-      width: 100%;
-    }
-    .vote-card {
-      margin: 8px;
-      padding: 12px 20px;
-      border-radius: 12px;
-      backdrop-filter: blur(var(--float-blur)) saturate(180%);
-      background: rgba(255,255,255,0.2);
-      box-shadow: 0 4px 10px var(--shadow-color);
-      cursor: pointer;
-      transition: transform 200ms, background 200ms;
-    }
-    .vote-card.selected {
-      background: var(--secondary);
-      transform: scale(1.05);
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 600px) {
-      #setup-form {
-        max-width: 90vw;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
-    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
-<body>
-  <div id="bg"></div>
-  <div class="blob" style="left:-140px; top:-120px"></div>
-  <div class="blob b2" style="right:-200px; top:40px"></div>
-  <div class="blob b3" style="left:40px; bottom:-180px"></div>
-  <div id="app">
-    <!-- Global gear button (top-right) -->
-    <button id="gear-btn" class="icon-btn" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="rgba(0,0,0,0.85)" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M19.4 15a8.8 8.8 0 0 0 .1-1l1.7-1.3-1.7-2.9-2.1.5a8.7 8.7 0 0 0-1.6-.9L15.5 7 12 5.7 8.5 7l-.3 2.4a8.7 8.7 0 0 0-1.6.9l-2.1-.5-1.7 2.9L4.5 14a8.8 8.8 0 0 0 .1 1l-1.8 1.4 1.7 2.9 2.2-.5c.5.4 1 .7 1.6.9l.3 2.4 3.5 1.3 3.5-1.3.3-2.4c.6-.2 1.1-.5 1.6-.9l2.2.5 1.7-2.9L19.4 15Z" stroke="rgba(0,0,0,0.75)" stroke-width="1.6" stroke-linejoin="round"/>
-      </svg>
+<body class="h-full bg-gradient font-english overflow-hidden">
+  <div id="app" class="h-full w-full relative overflow-auto">
+    <!-- Particles Container -->
+    <div id="particles" class="fixed inset-0 pointer-events-none overflow-hidden"></div>
+
+    <!-- Settings Button -->
+    <button id="settingsBtn" class="settings-btn" aria-label="Settings" onclick="openSettings()">
+      <span class="settings-gear">⚙️</span>
     </button>
-    <!-- Main Menu Page -->
-    <div id="main-menu" class="page active">
-      <h1 id="title">Spy Party</h1>
-      <div class="buttons">
-        <button id="continue-btn"></button>
-        <button id="guide-btn"></button>
-        <button id="settings-btn"></button>
+
+    <!-- Settings Modal -->
+    <div id="settingsBackdrop" class="modal-backdrop" onclick="closeSettings()"></div>
+    <div id="settingsModal" class="settings-modal">
+      <div class="glass-card rounded-3xl w-full max-w-xl p-6 md:p-8">
+        <div class="flex items-center justify-between mb-6">
+          <h3 id="settingsTitle" class="text-2xl md:text-3xl font-bold text-white" style="text-shadow: 0 0 24px var(--primary);">Settings</h3>
+          <button class="glass-button px-4 py-2 rounded-xl text-white/80" onclick="closeSettings()">✕</button>
+        </div>
+
+        <div class="space-y-6">
+          <!-- Language -->
+          <div class="glass rounded-2xl p-4">
+            <div class="flex items-center justify-between">
+              <p id="settingsLangLabel" class="text-white/80 font-semibold">Language</p>
+              <div class="flex gap-2">
+                <button id="settingsLangEn" class="chip" onclick="setLanguageFromSettings('en')">🇬🇧 <span class="text-white">English</span></button>
+                <button id="settingsLangFa" class="chip" onclick="setLanguageFromSettings('fa')">🇮🇷 <span class="text-white font-persian">فارسی</span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="glass rounded-2xl p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <p id="settingsSfxLabel" class="text-white/80 font-semibold">Sound Effects</p>
+              <div id="toggleSfx" class="toggle" onclick="toggleSfx()"></div>
+            </div>
+            <div class="flex items-center justify-between">
+              <p id="settingsHapticsLabel" class="text-white/80 font-semibold">Vibration</p>
+              <div id="toggleHaptics" class="toggle" onclick="toggleHaptics()"></div>
+            </div>
+          </div>
+
+          <!-- Difficulty Stats -->
+          <div class="glass rounded-2xl p-4">
+            <p id="settingsStatsLabel" class="text-white/80 font-semibold mb-3">Unused Words</p>
+            <div class="space-y-2 text-white/80" id="difficultyStats"></div>
+          </div>
+
+          
+          <button id="btnResetUsedWords" class="glass-button w-full py-3 rounded-2xl text-base font-semibold text-white/90" onclick="resetUsedWords()">
+            ♻️ Reset used words
+          </button>
+
+          <button class="glass-button w-full py-4 rounded-2xl text-lg font-semibold text-white glow-primary" onclick="closeSettings()">OK</button>
+        </div>
       </div>
     </div>
 
-    <!-- Guide Page -->
-    <div id="guide-page" class="page">
-      <h2 id="guide-title"></h2>
-      <div id="guide-content" class="glass">
-        <p id="guide-text"></p>
+    <div id="toast" class="toast"></div>
+
+    <!-- Setup Screen (start here) -->
+    <div id="setupScreen" class="screen active">
+      <div class="w-full max-w-lg">
+        <h2 id="setupTitle" class="text-4xl md:text-5xl font-bold text-white text-center mb-10 slide-down" style="text-shadow: 0 0 30px var(--primary);">
+          Game Setup
+        </h2>
+
+        <div class="glass-card rounded-3xl p-6 md:p-8 space-y-8 scale-in">
+          <!-- Player Count -->
+          <div class="slide-up stagger-1">
+            <div class="flex justify-between items-center mb-3">
+              <label id="labelPlayers" class="text-white/80 text-lg">Players</label>
+              <span id="playerCountDisplay" class="text-2xl font-bold glow-accent px-4 py-1 rounded-full glass">4</span>
+            </div>
+            <input type="range" id="playerSlider" min="3" max="12" value="4" class="w-full" oninput="updatePlayerCount(this.value)">
+          </div>
+
+          <!-- Spy Count -->
+          <div class="slide-up stagger-2">
+            <div class="flex justify-between items-center mb-3">
+              <label id="labelSpies" class="text-white/80 text-lg">Spies</label>
+              <span id="spyCountDisplay" class="text-2xl font-bold glow-accent px-4 py-1 rounded-full glass">1</span>
+            </div>
+            <input type="range" id="spySlider" min="1" max="1" value="1" class="w-full" oninput="updateSpyCount(this.value)">
+            <p id="spyLimitHint" class="text-white/50 text-sm mt-2">Spies cannot be more than players - 1</p>
+          </div>
+
+          <!-- Game Duration -->
+          <div class="slide-up stagger-3">
+            <div class="flex justify-between items-center mb-3">
+              <label id="labelDuration" class="text-white/80 text-lg">Duration</label>
+              <span id="durationDisplay" class="text-2xl font-bold glow-accent px-4 py-1 rounded-full glass">3:00</span>
+            </div>
+            <input type="range" id="durationSlider" min="60" max="600" value="180" step="30" class="w-full" oninput="updateDuration(this.value)">
+          </div>
+
+          <!-- Difficulty (accordion) -->
+          <div class="slide-up stagger-4">
+            <button id="difficultyAccordionBtn" class="glass-button accordion-btn py-4 rounded-2xl text-white flex items-center justify-between" onclick="toggleDifficultyAccordion()">
+              <span id="labelDifficulty" class="font-semibold">Difficulty</span>
+              <span class="text-white/70">▾</span>
+            </button>
+            <div id="difficultyAccordion" class="accordion-content mt-3">
+              <div class="glass rounded-2xl p-4 flex flex-wrap gap-2">
+                <button id="diff_easy" class="chip" onclick="setDifficulty('easy')">🟢 <span id="diffEasyText" class="text-white">Easy</span></button>
+                <button id="diff_normal" class="chip" onclick="setDifficulty('normal')">🟡 <span id="diffNormalText" class="text-white">Normal</span></button>
+                <button id="diff_hard" class="chip" onclick="setDifficulty('hard')">🟠 <span id="diffHardText" class="text-white">Hard</span></button>
+                <button id="diff_insane" class="chip" onclick="setDifficulty('insane')">🔴 <span id="diffInsaneText" class="text-white">Very Hard</span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Colors -->
+          <div class="slide-up stagger-5">
+            <label id="labelColors" class="text-white/80 text-lg block mb-4">Theme Colors</label>
+            <div class="flex justify-center gap-8">
+              <div class="text-center">
+                <input type="color" id="primaryColor" value="#B3E5FC" class="mb-2" onchange="updatePrimaryColor(this.value)">
+                <p id="labelPrimary" class="text-white/60 text-sm">Primary</p>
+              </div>
+              <div class="text-center">
+                <input type="color" id="secondaryColor" value="#FFFFFF" class="mb-2" onchange="updateSecondaryColor(this.value)">
+                <p id="labelSecondary" class="text-white/60 text-sm">Secondary</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button id="btnStart" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white slide-up glow-primary" onclick="startGame()">
+          ▶ Start Game
+        </button>
+
+        <button id="btnOpenSettings" class="glass-button w-full mt-4 py-3 rounded-xl text-white/70 slide-up" onclick="openSettings()">
+          ⚙️ Settings
+        </button>
       </div>
-      <button id="back-from-guide"></button>
     </div>
 
-    <!-- Settings Page -->
-    <div id="settings-page" class="page">
-      <h2 id="settings-title"></h2>
-      <div id="settings-options">
-        <div class="setting-row">
-          <label id="lang-label" for="language-select"></label>
-          <select id="language-select">
-            <option value="en">English</option>
-            <option value="fa">فارسی</option>
-          </select>
+    <!-- Role Reveal Screen -->
+    <div id="roleScreen" class="screen">
+      <div class="text-center w-full max-w-md">
+        <p id="playerLabel" class="text-2xl text-white/60 mb-4 slide-down">Player 1</p>
+
+        <div id="roleCard" class="glass-card rounded-3xl p-8 md:p-12 cursor-pointer breathing" onclick="revealRole()">
+          <div id="roleContent">
+            <div id="tapPrompt" class="text-center">
+              <div class="text-6xl mb-6">👆</div>
+              <p id="tapText" class="text-xl text-white/80">Tap to see your role</p>
+            </div>
+
+            <div id="roleRevealed" class="hidden">
+              <div id="roleIcon" class="text-8xl mb-6"></div>
+              <p id="roleText" class="text-3xl font-bold text-white mb-4"></p>
+              <p id="wordText" class="text-4xl font-bold text-white"></p>
+            </div>
+          </div>
         </div>
-        <div class="setting-row">
-          <label id="primary-label" for="primary-color"></label>
-          <input id="primary-color" type="color" value="#d8e3e7" />
-        </div>
-        <div class="setting-row">
-          <label id="secondary-label" for="secondary-color"></label>
-          <input id="secondary-color" type="color" value="#8ec5fc" />
-        </div>
-        <div class="setting-row">
-          <label id="sound-label"></label>
-          <div id="sound-toggle" class="toggle"></div>
-        </div>
-        <div class="setting-row">
-          <label id="vibration-label"></label>
-          <div id="vibration-toggle" class="toggle"></div>
-        </div>
+
+        <button id="btnConfirm" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white hidden glow-primary" onclick="confirmRole()">
+          Confirm & Pass
+        </button>
       </div>
-      <button id="back-from-settings"></button>
     </div>
 
-    <!-- Setup Page -->
-    <div id="setup-page" class="page">
-      <h2 id="setup-title"></h2>
-      <form id="setup-form">
-        <div class="field glass">
-          <div class="field-head">
-            <label id="player-count-label" for="player-count"></label>
-            <span class="value" id="player-count-val"></span>
+    <!-- Game Timer Screen -->
+    <div id="timerScreen" class="screen">
+      <div class="text-center">
+        <h2 id="discussTitle" class="text-3xl md:text-4xl font-bold text-white mb-8 slide-down" style="text-shadow: 0 0 30px var(--primary);">
+          Discussion Time
+        </h2>
+
+        <div class="relative w-64 h-64 md:w-80 md:h-80 mx-auto scale-in">
+          <svg class="w-full h-full" viewBox="0 0 160 160">
+            <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+            <circle id="timerRing" class="timer-ring" cx="80" cy="80" r="70" fill="none" stroke="var(--primary)" stroke-width="8" stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span id="timerDisplay" class="text-6xl md:text-7xl font-bold text-white" style="text-shadow: 0 0 30px var(--primary);">3:00</span>
           </div>
-          <input id="player-count" type="range" min="3" max="20" step="1" value="4" />
         </div>
 
-        <div class="field glass">
-          <div class="field-head">
-            <label id="spy-count-label" for="spy-count"></label>
-            <span class="value" id="spy-count-val"></span>
-          </div>
-          <input id="spy-count" type="range" min="1" max="2" step="1" value="1" />
-        </div>
-
-        <div class="field glass">
-          <div class="field-head">
-            <label id="round-time-label" for="round-time"></label>
-            <span class="value" id="round-time-val"></span>
-          </div>
-          <input id="round-time" type="range" min="1" max="10" step="1" value="3" />
-        </div>
-
-        <div class="field glass">
-          <div class="field-head">
-            <label id="rounds-label" for="rounds"></label>
-            <span class="value" id="rounds-val"></span>
-          </div>
-          <input id="rounds" type="range" min="1" max="10" step="1" value="3" />
-        </div>
-
-        <div class="field glass">
-          <div class="field-head">
-            <label id="difficulty-label" for="difficulty"></label>
-          </div>
-          <select id="difficulty">
-            <option value="easy"></option>
-            <option value="medium"></option>
-            <option value="hard"></option>
-            <option value="extreme"></option>
-          </select>
-        </div>
-        <button type="button" id="start-game"></button>
-      </form>
-    </div>
-
-    <!-- Role Reveal Page -->
-    <div id="role-page" class="page">
-      <h2 id="reveal-title"></h2>
-      <div id="role-card" class="card">
-        <div class="card-inner">
-          <div class="card-face card-front" id="role-front">Tap to reveal</div>
-          <div class="card-face card-back" id="role-back"></div>
-        </div>
+        <button id="btnEndDiscussion" class="glass-button w-full max-w-sm mt-8 py-4 rounded-2xl text-lg font-semibold text-white slide-up hidden" onclick="endDiscussion()">
+          🗳️ Start Voting
+        </button>
       </div>
-      <p id="role-instructions"></p>
     </div>
 
-    <!-- Timer & Voting Page -->
-    <div id="timer-page" class="page">
-      <h2 id="timer-title"></h2>
-      <div id="timer-container">
-        <svg id="timer-svg" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="6"/>
-          <circle id="timer-ring" cx="50" cy="50" r="45" fill="none" stroke="var(--secondary)" stroke-width="6" stroke-dasharray="282.743" stroke-dashoffset="0"/>
-        </svg>
+    <!-- Voting Screen -->
+    <div id="votingScreen" class="screen">
+      <div class="w-full max-w-lg">
+        <h2 id="voteTitle" class="text-3xl md:text-4xl font-bold text-white text-center mb-4 slide-down" style="text-shadow: 0 0 30px var(--primary);">
+          Vote for the Spy
+        </h2>
+        <p id="voteSubtitle" class="text-white/60 text-center mb-8 slide-down">Who do you think is the spy?</p>
+
+        <div id="votingGrid" class="grid grid-cols-2 gap-4 mb-8"></div>
+
+        <button id="btnConfirmVote" class="glass-button w-full py-5 rounded-2xl text-xl font-semibold text-white glow-primary hidden" onclick="confirmVotes()">
+          Confirm Votes
+        </button>
       </div>
-      <button id="vote-button"></button>
     </div>
 
-    <!-- Voting Page -->
-    <div id="vote-page" class="page">
-      <h2 id="vote-title"></h2>
-      <div id="vote-list"></div>
-      <button id="show-result-btn"></button>
-    </div>
+    <!-- Result Screen -->
+    <div id="resultScreen" class="screen">
+      <div class="text-center w-full max-w-md">
+        <div id="resultCard" class="glass-card rounded-3xl p-8 md:p-12 scale-in">
+          <div id="resultIcon" class="text-8xl mb-6"></div>
+          <h2 id="resultTitle" class="text-3xl md:text-4xl font-bold text-white mb-4"></h2>
+          <p id="resultMessage" class="text-xl text-white/80 mb-6"></p>
 
-    <!-- Result Page -->
-    <div id="result-page" class="page">
-      <h2 id="result-title"></h2>
-      <p id="result-message"></p>
-      <button id="back-to-menu"></button>
+          <div class="glass rounded-2xl p-4 mb-4">
+            <p id="revealSpyLabel" class="text-white/60 text-sm mb-1">The Spies Were</p>
+            <p id="revealSpy" class="text-2xl font-bold text-white"></p>
+          </div>
+
+          <div class="glass rounded-2xl p-4">
+            <p id="revealWordLabel" class="text-white/60 text-sm mb-1">The Word Was</p>
+            <p id="revealWord" class="text-2xl font-bold text-white"></p>
+          </div>
+        </div>
+
+        <button id="btnPlayAgain" class="glass-button w-full mt-8 py-5 rounded-2xl text-xl font-semibold text-white glow-primary" onclick="playAgain()">
+          🔄 Play Again
+        </button>
+
+        <button id="btnNewSetup" class="glass-button w-full mt-4 py-3 rounded-xl text-white/70" onclick="newSetup()">
+          ⚙️ New Setup
+        </button>
+      </div>
     </div>
   </div>
 
   <script>
-    /* Application state and constants */
-    const state = {
-      language: localStorage.getItem('spyparty_language') || 'en',
-      primary: localStorage.getItem('spyparty_primary') || '#d8e3e7',
-      secondary: localStorage.getItem('spyparty_secondary') || '#8ec5fc',
-      sound: JSON.parse(localStorage.getItem('spyparty_sound') || 'true'),
-      vibration: JSON.parse(localStorage.getItem('spyparty_vibration') || 'true'),
-      players: [],
-      spies: [],
-      wordsUsed: JSON.parse(localStorage.getItem('spyparty_words') || '{}'),
-      wordBank: {
-        en: {
-          easy: ['apple','river','cat','market','car','star','window','music','garden','book'],
-          medium: ['airport','engineer','philosophy','university','restaurant','pyramid','eclipse','mountain','artist','chocolate'],
-          hard: ['cryptography','metamorphosis','subconscious','photosynthesis','architecture','microscopy','algorithm','parliament','laboratory','pendulum'],
-          extreme: ['polymerization','electromagnetism','photosynthetic','microprocessor','bureaucracy','quantization','bioinformatics','conflagration','neurotransmitter','philanthropist']
-        },
-        fa: {
-          easy: ['سیب','رود','گربه','بازار','ماشین','ستاره','پنجره','موسیقی','باغ','کتاب'],
-          medium: ['فرودگاه','مهندس','فلسفه','دانشگاه','رستوران','اهرام','خورشیدگرفتگی','کوهستان','هنرمند','شکلات'],
-          hard: ['رمزشناسی','دگردیسی','ناخودآگاه','فتوسنتز','معماری','میکروسکوپی','الگوریتم','مجلس','آزمایشگاه','پاندول'],
-          extreme: ['پلیمرسازی','الکترومغناطیس','فوتوسنتتیک','ریزپردازنده','بوروکراسی','کوانتش','زیست‌اطلاعاتی','حریق گسترده','نوروترانسمیتر','نیکوکاری']
-        }
-      },
-      currentRound: 0,
-      maxRounds: 1,
-      roundTime: 3,
-      playerCount: 4,
-      spyCount: 1,
-      difficulty: 'easy',
-      roles: [],
-      currentPlayerIndex: 0,
-      votes: {},
-      timerInterval: null,
-    };
-
-    /* Translation dictionary */
-    const i18n = {
+    // ═══════════════════════════════════════════════════════════════
+    // NEW WORD BANK (generated to be large, non-weird)
+    // ═══════════════════════════════════════════════════════════════
+    const WORD_BANK_BASE = {
       en: {
-        title: 'Spy Party',
-        continue: 'Continue',
-        guide: 'Guide',
-        settings: 'Settings',
-        guideTitle: 'How to Play',
-        guideText: 'In this party game, players are given secret roles. Most will receive a common word; one or more will be spies who receive no word. The spies must deduce the word through conversation without being discovered. Citizens must identify the spies.',
-        back: 'Back',
-        settingsTitle: 'Settings',
-        language: 'Language',
-        primaryColor: 'Primary color',
-        secondaryColor: 'Secondary color',
-        sound: 'Sound effects',
-        vibration: 'Vibration',
-        setupTitle: 'Game Setup',
-        playerCount: 'Number of players',
-        spyCount: 'Number of spies',
-        roundTime: 'Round time (minutes)',
-        rounds: 'Number of rounds',
-        difficulty: 'Difficulty',
-        easy: 'Easy',
-        medium: 'Medium',
-        hard: 'Hard',
-        extreme: 'Extreme',
-        start: 'Start Game',
-        tapReveal: 'Tap to reveal your role',
-        tapNext: 'Tap to pass to next player',
-        revealTitle: 'Role Reveal',
-        revealInstr: 'Each player taps to reveal their role. Pass the device to the next player.',
-        youAreSpy: 'You are the Spy',
-        yourWord: 'Your word:',
-        timerTitle: 'Discuss',
-        vote: 'Vote',
-        voteTitle: 'Voting',
-        voteInstructions: 'Select players you suspect of being spies and submit.',
-        showResult: 'Show Result',
-        resultTitle: 'Result',
-        citizensWin: 'Citizens win! All spies caught.',
-        spiesWin: 'Spies win! They remain hidden.',
-        draw: 'It\'s a draw.',
-        backToMenu: 'Back to Menu',
-        noMoreWords: 'No more unused words available. Please reset words from settings.',
+        easy: [
+          'Apple','Banana','Orange','Grapes','Watermelon','Strawberry','Peach','Cherry','Pineapple','Mango',
+          'Car','Bicycle','Bus','Train','Airplane','Boat','Motorcycle','Taxi','Helmet','Backpack',
+          'Hospital','School','Library','Airport','Restaurant','Hotel','Museum','Cinema','Stadium','Park',
+          'Chair','Table','Sofa','Bed','Lamp','Mirror','Clock','Carpet','Curtain','Door',
+          'Dog','Cat','Rabbit','Lion','Tiger','Bear','Fox','Wolf','Elephant','Deer'
+        ],
+        normal: [
+          'Microwave','Refrigerator','Washing machine','Vacuum cleaner','Power bank','Smartphone','Headphones','Router','Printer','Scanner',
+          'Traffic light','Pedestrian crossing','Parking lot','Bus stop','Train station','Ticket office','Reception desk','Security camera','Elevator','Escalator',
+          'Dentist','Pharmacist','Architect','Photographer','Electrician','Mechanic','Journalist','Translator','Programmer','Designer'
+        ],
+        hard: [
+          'Heat insulation','Seismic joint','Fire extinguisher','Circuit breaker','Water pressure','Air filter','Carbon monoxide','Emergency exit','First aid kit','Backup generator',
+          'Ceramic tile','Bathroom tiles','Shopping bag','Toolbox','Wrench set','Screwdriver','Measuring tape','Level meter','Wall plug','Cable duct'
+        ],
+        insane: [
+          'Acoustic insulation','Humidity barrier','Thermal conductivity','Load-bearing wall','Shear wall','Reinforced concrete','Steel reinforcement','Expansion joint','Waterproofing membrane','Ventilation duct',
+          'Bathroom grout','Silicone sealant','Hand truck','Foldable ladder','Circuit diagram','Network topology','Compression fitting','Ball valve','Wall anchor','Gypsum board'
+        ]
       },
       fa: {
-        title: 'بازی جاسوس',
-        continue: 'ادامه',
-        guide: 'راهنما',
+        easy: [
+          'سیب','موز','پرتقال','انگور','هندوانه','توت فرنگی','هلو','گیلاس','آناناس','انبه',
+          'ماشین','دوچرخه','اتوبوس','قطار','هواپیما','قایق','موتورسیکلت','تاکسی','کلاه ایمنی','کوله پشتی',
+          'بیمارستان','مدرسه','کتابخانه','فرودگاه','رستوران','هتل','موزه','سینما','پارک','استادیوم',
+          'صندلی','میز','مبل','تخت','لامپ','آینه','ساعت','فرش','پرده','در',
+          'سگ','گربه','خرگوش','شیر','ببر','خرس','روباه','گرگ','فیل','آهو',
+          'نوزاد','مادر','پدر','خواهر','برادر','دوست','همسایه','دانش آموز','معلم','پزشک',
+          'نان','برنج','ماکارونی','پنیر','ماست','تخم مرغ','چای','قهوه','آب','آبمیوه',
+          'کتاب','دفتر','خودکار','مداد','پاک کن','کیف','کفش','جوراب','کلاه','پالتو',
+          'باران','برف','باد','آفتاب','ابر','شب','صبح','ظهر','عصر','بهار',
+          'کیف پول','کلید','موبایل','شارژر','تلویزیون','یخچال','اجاق گاز','لیوان','بشقاب','قاشق',
+          'گلدان','گل','درخت',
+          'خیابان','کوچه','خانه','پنجره','بالکن','حیاط','پله',
+          'تهران','تبریز','اصفهان','شیراز','مشهد','رشت','اهواز','کرمان','یزد','کیش',
+          'ایران','ترکیه','آلمان','فرانسه','ایتالیا','اسپانیا','انگلیس','آمریکا','ژاپن','چین',
+          'فوتبال','بسکتبال','والیبال','تنیس','شنا','کشتی','دوچرخه سواری','دو میدانی','بدنسازی','شطرنج',
+          'علی دایی','کریستیانو رونالدو','لیونل مسی','مایکل جردن','محمد علی کلی','مایکل جکسون','الویس پریسلی','آلبرت اینشتین','استیو جابز','بیل گیتس',
+          'تام و جری','مرد عنکبوتی','بتمن','سوپرمن','هری پاتر','ارباب حلقه ها','جنگ ستارگان','پاندای کونگ فو کار','شیرشاه','یخ زده',
+          'گیتار','پیانو','ویولن','درام','سنتور','تار','سه تار','دف','نی','کیبورد',
+          'پلیس','آتش نشان','خلبان','راننده','آشپز','نقاش','ورزشکار','خواننده','بازیگر','کارآفرین'
+        ],
+        normal: [
+          'مایکروویو','یخچال','ماشین لباسشویی','جاروبرقی','پاوربانک','گوشی هوشمند','هدفون','روتر','پرینتر','اسکنر',
+          'چراغ راهنمایی','خط عابر پیاده','پارکینگ','ایستگاه اتوبوس','ایستگاه قطار','بلیت فروشی','پذیرش','دوربین مداربسته','آسانسور','پله برقی',
+          'دندانپزشک','داروساز','معمار','عکاس','برقکار','مکانیک','خبرنگار','مترجم','برنامه نویس','طراح',
+          'ماشین ظرفشویی','توستر','کتری برقی','مخلوط کن','چرخ گوشت','قهوه ساز','سشوار','اتو','پنکه','بخاری برقی',
+          'کنترل تلویزیون','مودم اینترنت','کابل شارژ','فلش مموری','هارد اکسترنال','کیبورد','ماوس','اسپیکر','پروژکتور','پاور سه راهی',
+          'کارت بانکی','رمز پویا','عابر بانک','فروشگاه زنجیره ای','سوپرمارکت','نانوایی','قصابی','میوه فروشی','داروخانه','پست',
+          'پمپ باد','جک ماشین','آچار چرخ','چراغ قوه','چاقوی آشپزخانه','تخته گوشت','قابلمه','ماهیتابه','فلاسک','قمقمه',
+          'ریمل','عطر','کرم ضدآفتاب','تیغ اصلاح','مسواک','خمیر دندان','شامپو','صابون','دستمال کاغذی','مایع ظرفشویی',
+          'دستکش ظرفشویی','کیسه زباله','سطل زباله','جا کلیدی','قفل','زنگ در','چشمی در','پادری','آویز لباس','چوب لباسی',
+          'قاب گوشی','گلس گوشی','کیف لپ تاپ','کوله مدرسه','جامدادی','منگنه','چسب نواری','قیچی','خط کش',
+          'کاغذ A4',
+          'مترو','ترمینال','پمپ بنزین','پاساژ','نمایشگاه','سالن ورزشی','استخر','فودکورت','شهربازی','ایستگاه پلیس',
+          'پرسپولیس','استقلال','تراکتور','بارسلونا','رئال مادرید','منچستر یونایتد','لیورپول','بایرن مونیخ','یوونتوس','میلان',
+          'جام جهانی','لیگ قهرمانان اروپا','المپیک','جام ملت های آسیا','لیگ برتر','جام حذفی','دربی','فینال','وقت اضافه','پنالتی',
+          'آپدیت نرم افزار','حریم خصوصی','رمز عبور','اثر انگشت','تشخیص چهره','بلوتوث','GPS','هات اسپات','شارژ سریع','حالت پرواز',
+          'اینستاگرام','تلگرام','واتساپ','یوتیوب','توییتر','تیک تاک','لینکدین','اسنپ چت','آپارات','دیوار',
+          'پاسپورت','ویزا','چمدان','گیت پرواز','ترانزیت','رزرو هتل','تور گردشگری','راهنمای سفر','نقشه شهر','کارت پرواز',
+          'پیتزا','همبرگر','فلافل','کباب','قرمه سبزی','قیمه','آش رشته','میرزا قاسمی','جوجه کباب','بستنی',
+          'داور','کاپیتان','مربی','هوادار','گزارشگر','بازیکن ذخیره','تدارکات','پزشک تیم','مدیرعامل','سخنگو'
+        ],
+        hard: [
+          'قفل در','کلید یدک','زنجیر در','چشمی در','دستگیره در','درب ضد سرقت','پادری','آویز لباس','چوب لباسی','کمد دیواری',
+          'ریل کشو','لولای کابینت','دستگیره کابینت','جا ادویه','جا قاشقی','جای دستمال','جا صابونی','جا مسواکی','پمپ مایع','اسکاچ',
+          'سطل بازیافت','کیسه زباله','جعبه نظم دهنده','قفسه','کشو','جاکفشی','جارو شارژی','دستمال میکروفایبر','تی آبگیر','سطل آب',
+          'پیچ گوشتی','انبردست','آچار فرانسه','چکش','متر','تراز','کاتر','قیچی','چسب برق','نوار چسب',
+          'میخ','پیچ','مته','دریل','نردبان','چراغ قوه','باتری قلمی','محافظ برق','سه راهی برق','کابل شارژ',
+          'قابلمه زودپز','زودپز برقی','ماهی تابه گریل','صافی','الک','ترازو آشپزخانه','رنده','همزن دستی','قهوه ساز','فر توکار',
+          'ترشی','شور','لواشک','رب انار','زعفران','هل','دارچین','زیره','گلاب','عرق نعناع',
+          'کارت پرواز','گیت پرواز','چمدان دستی','هتل آپارتمان','اقامتگاه بومگردی','نقشه مترو','ایستگاه تاکسی','عوارضی','تابلو راهنما','کد پستی',
+          'وقت اضافه','پنالتی','کاپیتان','کارت زرد','کارت قرمز','سوت داور','تمرین','مسابقه دوستانه','فینال','هوادار'
+        ],
+        insane: [
+          'نوار درزگیر','چسب سیلیکون','درزگیر پنجره','توری پنجره','قفل پنجره','سرشیر آب','شیلنگ آب','شلنگ گاز','فیلتر آب','دوش حمام',
+          'کاور مبل','روکش صندلی','کاور تشک','روتختی','روبالشی','پتو مسافرتی','پرده کرکره','میله پرده','قرنیز','کفپوش پارکت',
+          'کارت حافظه','هارد اکسترنال','کابل HDMI','کابل شبکه','مودم اینترنت','روتر','پاوربانک','شارژر فندکی','هندزفری','هدفون بی سیم',
+          'پایه گوشی','پایه لپ تاپ','قفل دوچرخه','کلاه ایمنی','چراغ عقب دوچرخه','پمپ باد','جک ماشین','آچار چرخ','زاپاس','مثلث خطر',
+          'ساک دستی','کیسه فریزر','کیسه زیپ دار','ظرف درب دار','قمقمه','فلاسک','پودر کیک','بکینگ پودر','وانیل','پودر کاکائو',
+          'خامه صبحانه','پنیر خامه ای','شیرعسلی','سس مایونز','سس کچاپ','سس خردل','زیتون','خیارشور','کنسرو ماهی','تن ماهی',
+          'لیگ قهرمانان اروپا','جام ملت های آسیا','المپیک','جام جهانی','مرحله گروهی','یک هشتم نهایی','نیمه نهایی','وقت استراحت','تساوی','گل به خودی',
+          'خط ویژه','طرح ترافیک','چراغ راهنمایی','پارک حاشیه ای','ایستگاه شارژ','کارت بلیت','کارتخوان','صف انتظار','تابلو اعلانات','ورودی اضطراری'
+        ]
+      }
+    };
+
+    function expandWordBank() {
+      // Deterministic-ish shuffle using a simple LCG
+      const lcg = (seed) => () => (seed = (seed * 48271) % 0x7fffffff) / 0x7fffffff;
+      const targets = { easy: 450, normal: 450, hard: 450, insane: 450 };
+
+      const GEN = {
+        en: {
+          easy: {
+            a: ['Red','Blue','Green','Small','Big','Sunny','Night','Morning','Hot','Cold'],
+            b: ['ball','house','street','garden','window','cup','shirt','shoe','tree','book']
+          },
+          normal: {
+            a: ['Electric','Digital','Portable','Wireless','Rechargeable','Foldable','Automatic','Smart','Compact','Heavy-duty'],
+            b: ['kettle','speaker','keyboard','mouse','power strip','adapter','flashlight','tripod','stroller','tool bag']
+          },
+          hard: {
+            a: ['Bathroom','Kitchen','Garage','Outdoor','Emergency','Electrical','Plumbing','Safety','Structural','Workshop'],
+            b: ['sealant','valve','junction box','cable tray','pressure gauge','hose clamp','anchor bolt','safety relay','duct tape','shock absorber']
+          },
+          insane: {
+            a: ['Reinforced','Load-bearing','Waterproof','Thermal','Acoustic','Seismic','Hydraulic','Ventilation','Fire-rated','Insulation'],
+            b: ['membrane','composite','expansion joint','control panel','distribution board','conduit bend','compression fitting','shear connector','vapor barrier','structural bracket']
+          }
+        },
+        fa: {
+          easy: {
+            a: ['قرمز','آبی','سبز','کوچک','بزرگ','صبح','شب','گرم','سرد','نو'],
+            b: ['توپ','خانه','خیابان','باغ','پنجره','لیوان','پیراهن','کفش','درخت','کتاب']
+          },
+          normal: {
+            a: ['برقی','دیجیتال','قابل حمل','بی سیم','شارژی','تاشو','خودکار','هوشمند','جمع و جور','محکم'],
+            b: ['کتری','اسپیکر','کیبورد','ماوس','سه راهی برق','آداپتور','چراغ قوه','سه پایه','کالسکه','کیف ابزار']
+          },
+          hard: {
+            a: ['حمام','آشپزخانه','پارکینگ','فضای باز','اضطراری','برق','لوله کشی','ایمنی','سازه','کارگاه'],
+            b: ['چسب','شیر','جعبه تقسیم','سینی کابل','فشارسنج','بست شلنگ','پیچ رول بولت','رله ایمنی','نوار درزگیر','کمک فنر']
+          },
+          insane: {
+            a: ['مسلح','باربر','ضدآب','حرارتی','صوتی','لرزه ای','هیدرولیک','تهویه','ضدحریق','عایق'],
+            b: ['غشا','کامپوزیت','درز انبساط','تابلو برق','جعبه فیوز','خم لوله','اتصال فشاری','اتصال برشی','مانع بخار','براکت سازه']
+          }
+        }
+      };
+
+      for (const lang of ['en','fa']) {
+        for (const diff of ['easy','normal','hard','insane']) {
+          // Keep Persian 'insane' bank curated (no auto-expansion) so counts match the hand-picked list
+          if (lang === 'fa' && diff === 'insane') { continue; }
+          const set = new Set(WORD_BANK_BASE[lang][diff]);
+          const rnd = lcg((lang.charCodeAt(0) + lang.charCodeAt(1) + diff.length) * 1337);
+          const {a,b} = GEN[lang][diff];
+          // generate combos
+          const combos = [];
+          for (let i = 0; i < a.length; i++) {
+            for (let j = 0; j < b.length; j++) {
+              combos.push(lang === 'fa' ? `${b[j]} ${a[i]}` : `${a[i]} ${b[j]}`);
+            }
+          }
+          // shuffle combos
+          for (let i = combos.length - 1; i > 0; i--) {
+            const j = Math.floor(rnd() * (i + 1));
+            [combos[i], combos[j]] = [combos[j], combos[i]];
+          }
+          for (const w of combos) {
+            if (set.size >= targets[diff]) break;
+            set.add(w);
+          }
+          WORD_BANK_BASE[lang][diff] = Array.from(set);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSLATIONS
+    // ═══════════════════════════════════════════════════════════════
+    const TRANSLATIONS = {
+      en: {
+        settings: 'Settings',
+        language: 'Language',
+        soundEffects: 'Sound Effects',
+        vibration: 'Vibration',
+        unusedWords: 'Unused Words',
+
+        resetUsedBtn: '♻️ Reset used words',
+        resetUsedConfirm: 'Reset ALL used words history? Words may repeat again.',
+        resetUsedDone: 'Used words reset ✅',
+        gameSetup: 'Game Setup',
+        players: 'Players',
+        spies: 'Spies',
+        duration: 'Duration',
+        difficulty: 'Difficulty',
+        easy: 'Easy',
+        normal: 'Normal',
+        hard: 'Hard',
+        insane: 'Very Hard',
+        themeColors: 'Theme Colors',
+        primary: 'Primary',
+        secondary: 'Secondary',
+        startGame: '▶ Start Game',
+        settingsBtn: '⚙️ Settings',
+
+        player: 'Player',
+        tapToSee: 'Tap to see your role',
+        youAreNormal: 'You are a Citizen',
+        youAreSpy: 'YOU ARE A SPY',
+        hidden: '???',
+        confirmPass: 'Confirm & Pass',
+        discussionTime: 'Discussion Time',
+        startVoting: '🗳️ Start Voting',
+        voteForSpy: 'Vote for a Spy',
+        whoIsSpy: 'Who do you think is a spy?',
+        confirmVotes: 'Confirm Votes',
+        playersFound: 'Players Found a Spy!',
+        spyWins: 'The Spies Win!',
+        spiesWere: 'The Spies Were',
+        wordWas: 'The Word Was',
+        playAgain: '🔄 Play Again',
+        newSetup: '⚙️ New Setup',
+        selectAll: 'Everyone must vote!',
+        noWordsLeft: 'No unused words left for this difficulty 😬',
+        spiesLimit: 'Spies cannot be more than players - 1',
+
+        stat_easy: 'Easy',
+        stat_normal: 'Normal',
+        stat_hard: 'Hard',
+        stat_insane: 'Very Hard'
+      },
+      fa: {
         settings: 'تنظیمات',
-        guideTitle: 'نحوه بازی',
-        guideText: 'در این بازی گروهی، بازیکنان نقش‌های مخفی دریافت می‌کنند. اکثر بازیکنان یک کلمه مشترک می‌گیرند؛ اما یک یا چند نفر جاسوس هستند و کلمه‌ای ندارند. جاسوس‌ها باید از طریق گفتگو کلمه را حدس بزنند بدون آنکه شناسایی شوند. شهروندان باید جاسوس‌ها را پیدا کنند.',
-        back: 'بازگشت',
-        settingsTitle: 'تنظیمات',
         language: 'زبان',
-        primaryColor: 'رنگ اصلی',
-        secondaryColor: 'رنگ ثانویه',
-        sound: 'افکت صدا',
+        soundEffects: 'افکت صوتی',
         vibration: 'لرزش',
-        setupTitle: 'راه‌اندازی بازی',
-        playerCount: 'تعداد بازیکنان',
-        spyCount: 'تعداد جاسوسان',
-        roundTime: 'زمان هر دور (دقیقه)',
-        rounds: 'تعداد دورها',
-        difficulty: 'سطح سختی',
-        easy: 'آسان',
-        medium: 'متوسط',
+        unusedWords: 'کلماتِ باقی‌مانده',
+
+        resetUsedBtn: '♻️ ریست کلمات استفاده‌شده',
+        resetUsedConfirm: 'مطمئنی؟ تاریخچهٔ کلمات استفاده‌شده پاک می‌شه و ممکنه کلمات دوباره تکرار بشن.',
+        resetUsedDone: 'کلمات استفاده‌شده ریست شد ✅',
+        gameSetup: 'تنظیمات بازی',
+        players: 'تعداد بازیکنان',
+        spies: 'تعداد جاسوس‌ها',
+        duration: 'مدت زمان',
+        difficulty: 'درجه سختی',
+        easy: 'راحت',
+        normal: 'معمولی',
         hard: 'سخت',
-        extreme: 'فوق‌العاده سخت',
-        start: 'شروع بازی',
-        tapReveal: 'برای دیدن نقش لمس کنید',
-        tapNext: 'برای نفر بعدی لمس کنید',
-        revealTitle: 'نمایش نقش',
-        revealInstr: 'هر بازیکن روی کارت خود بزند تا نقشش را ببیند. سپس دستگاه را به نفر بعد بدهید.',
-        youAreSpy: 'تو جاسوسی',
-        yourWord: 'کلمه تو:',
-        timerTitle: 'بحث کنید',
-        vote: 'رأی',
-        voteTitle: 'رأی‌گیری',
-        voteInstructions: 'بازیکنان مظنون به جاسوسی را انتخاب کرده و ارسال کنید.',
-        showResult: 'نمایش نتیجه',
-        resultTitle: 'نتیجه',
-        citizensWin: 'شهروندان پیروز شدند! همه جاسوس‌ها شناسایی شدند.',
-        spiesWin: 'جاسوسان پیروز شدند! آن‌ها مخفی ماندند.',
-        draw: 'بازی مساوی شد.',
-        backToMenu: 'بازگشت به منو',
-        noMoreWords: 'هیچ کلمه استفاده‌نشده‌ای باقی نمانده است. لطفاً کلمات را از تنظیمات بازنشانی کنید.',
+        insane: 'خیلی سخت',
+        themeColors: 'رنگ های تم',
+        primary: 'اصلی',
+        secondary: 'فرعی',
+        startGame: '▶ شروع بازی',
+        settingsBtn: '⚙️ تنظیمات',
+
+        player: 'بازیکن',
+        tapToSee: 'لمس کنید تا نقش خود را ببینید',
+        youAreNormal: 'شما یک شهروند هستید',
+        youAreSpy: 'شما جاسوس هستید',
+        hidden: '؟؟؟',
+        confirmPass: 'تایید و رد کردن',
+        discussionTime: 'زمان بحث',
+        startVoting: '🗳️ شروع رای گیری',
+        voteForSpy: 'به جاسوس رای بدهید',
+        whoIsSpy: 'فکر می کنید جاسوس کیست؟',
+        confirmVotes: 'تایید رای ها',
+        playersFound: 'بازیکنان یک جاسوس را پیدا کردند!',
+        spyWins: 'جاسوس‌ها برنده شدند!',
+        spiesWere: 'جاسوس‌ها بودند',
+        wordWas: 'کلمه بود',
+        playAgain: '🔄 بازی دوباره',
+        newSetup: '⚙️ تنظیمات جدید',
+        selectAll: 'همه باید رای بدهند!',
+        noWordsLeft: 'برای این درجه سختی دیگه کلمه دیده‌نشده نداریم 😬',
+        spiesLimit: 'تعداد جاسوس‌ها نمی‌تونه بیشتر از (بازیکن‌ها - ۱) باشه',
+
+        stat_easy: 'راحت',
+        stat_normal: 'معمولی',
+        stat_hard: 'سخت',
+        stat_insane: 'خیلی سخت'
       }
     };
 
-    /* Utility functions */
-    function updateTheme() {
-      document.documentElement.style.setProperty('--primary', state.primary);
-      document.documentElement.style.setProperty('--secondary', state.secondary);
-    }
-
-    function updateLanguage() {
-      const dict = i18n[state.language];
-      // Update static texts
-      document.getElementById('title').textContent = dict.title;
-      document.getElementById('continue-btn').textContent = dict.continue;
-      document.getElementById('guide-btn').textContent = dict.guide;
-      document.getElementById('settings-btn').textContent = dict.settings;
-      document.getElementById('guide-title').textContent = dict.guideTitle;
-      document.getElementById('guide-text').textContent = dict.guideText;
-      document.getElementById('back-from-guide').textContent = dict.back;
-      document.getElementById('settings-title').textContent = dict.settingsTitle;
-      document.getElementById('lang-label').textContent = dict.language;
-      document.getElementById('primary-label').textContent = dict.primaryColor;
-      document.getElementById('secondary-label').textContent = dict.secondaryColor;
-      document.getElementById('sound-label').textContent = dict.sound;
-      document.getElementById('vibration-label').textContent = dict.vibration;
-      document.getElementById('back-from-settings').textContent = dict.back;
-      document.getElementById('setup-title').textContent = dict.setupTitle;
-      document.getElementById('player-count-label').textContent = dict.playerCount;
-      document.getElementById('spy-count-label').textContent = dict.spyCount;
-      document.getElementById('round-time-label').textContent = dict.roundTime;
-      document.getElementById('rounds-label').textContent = dict.rounds;
-      document.getElementById('difficulty-label').textContent = dict.difficulty;
-      document.getElementById('difficulty').options[0].textContent = dict.easy;
-      document.getElementById('difficulty').options[1].textContent = dict.medium;
-      document.getElementById('difficulty').options[2].textContent = dict.hard;
-      document.getElementById('difficulty').options[3].textContent = dict.extreme;
-      document.getElementById('start-game').textContent = dict.start;
-      document.getElementById('reveal-title').textContent = dict.revealTitle;
-      document.getElementById('role-front').textContent = dict.tapReveal;
-      document.getElementById('role-instructions').textContent = dict.revealInstr;
-      document.getElementById('timer-title').textContent = dict.timerTitle;
-      document.getElementById('vote-button').textContent = dict.vote;
-      document.getElementById('vote-title').textContent = dict.voteTitle;
-      document.getElementById('show-result-btn').textContent = dict.showResult;
-      document.getElementById('result-title').textContent = dict.resultTitle;
-      document.getElementById('back-to-menu').textContent = dict.backToMenu;
-
-      // Set direction and text alignment based on language
-      document.documentElement.setAttribute('dir', state.language === 'fa' ? 'rtl' : 'ltr');
-      // LTR/RTL friendly transform origins
-      document.querySelectorAll('.page').forEach(p => {
-        p.style.transformOrigin = (state.language === 'fa') ? 'right center' : 'left center';
-      });
-      // apply text alignment to dynamic elements if needed
-    }
-
-    // --- Sound (Web Audio, fully self-contained) ---
-    const SFX = (() => {
-      let ctx = null;
-      let master = null;
-      let unlocked = false;
-      function ensure() {
-        if (!state.sound) return null;
-        if (!ctx) {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          ctx = new AC();
-          master = ctx.createGain();
-          master.gain.value = 0.35;
-          master.connect(ctx.destination);
-        }
-        return ctx;
-      }
-      async function unlock() {
-        if (unlocked) return;
-        const c = ensure();
-        if (!c) return;
-        if (c.state === 'suspended') {
-          try { await c.resume(); } catch (_) {}
-        }
-        // tiny silent blip to unlock on iOS
-        const o = c.createOscillator();
-        const g = c.createGain();
-        g.gain.value = 0.0001;
-        o.frequency.value = 440;
-        o.connect(g); g.connect(master);
-        o.start(); o.stop(c.currentTime + 0.01);
-        unlocked = true;
-      }
-
-      function glassPing({ freq = 880, dur = 0.12, gain = 0.20, detune = 6 } = {}) {
-        const c = ensure();
-        if (!c) return;
-        const t0 = c.currentTime;
-        const o1 = c.createOscillator();
-        const o2 = c.createOscillator();
-        const g = c.createGain();
-        const bp = c.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.frequency.setValueAtTime(freq, t0);
-        bp.Q.setValueAtTime(8, t0);
-        o1.type = 'sine';
-        o2.type = 'triangle';
-        o1.frequency.setValueAtTime(freq, t0);
-        o2.frequency.setValueAtTime(freq * 1.01, t0);
-        o1.detune.setValueAtTime(-detune, t0);
-        o2.detune.setValueAtTime(detune, t0);
-        g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-        o1.connect(bp); o2.connect(bp);
-        bp.connect(g);
-        g.connect(master);
-        o1.start(t0);
-        o2.start(t0);
-        o1.stop(t0 + dur + 0.02);
-        o2.stop(t0 + dur + 0.02);
-      }
-
-      function click() { glassPing({ freq: 1040, gain: 0.18, dur: 0.10 }); }
-      function flip() { glassPing({ freq: 740, gain: 0.22, dur: 0.14 }); }
-      function warn() { glassPing({ freq: 520, gain: 0.24, dur: 0.12 }); }
-      function tick() { glassPing({ freq: 680, gain: 0.14, dur: 0.07 }); }
-
-      return { ensure, unlock, click, flip, warn, tick };
-    })();
-
-    function saveSettings() {
-      localStorage.setItem('spyparty_language', state.language);
-      localStorage.setItem('spyparty_primary', state.primary);
-      localStorage.setItem('spyparty_secondary', state.secondary);
-      localStorage.setItem('spyparty_sound', state.sound);
-      localStorage.setItem('spyparty_vibration', state.vibration);
-      localStorage.setItem('spyparty_words', JSON.stringify(state.wordsUsed));
-    }
-
-    function showPage(id) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-    }
-
-    function rangeRandom(max) {
-      // secure random integer [0, max)
-      const array = new Uint32Array(1);
-      window.crypto.getRandomValues(array);
-      return array[0] % max;
-    }
-
-    function pickWord() {
-      const lang = state.language;
-      const diff = state.difficulty;
-      const bank = state.wordBank[lang][diff];
-      if (!state.wordsUsed[lang]) state.wordsUsed[lang] = {};
-      if (!state.wordsUsed[lang][diff]) state.wordsUsed[lang][diff] = [];
-      const used = new Set(state.wordsUsed[lang][diff]);
-      const available = bank.filter(w => !used.has(w));
-      if (available.length === 0) {
-        alert(i18n[state.language].noMoreWords);
-        return null;
-      }
-      const idx = rangeRandom(available.length);
-      const word = available[idx];
-      state.wordsUsed[lang][diff].push(word);
-      saveSettings();
-      return word;
-    }
-
-    /* Role assignment */
-    function assignRoles() {
-      state.roles = [];
-      const word = pickWord();
-      if (!word) return;
-      // push spies as false for citizens, true for spy
-      const arr = Array(state.playerCount).fill(false);
-      let spiesAssigned = 0;
-      while (spiesAssigned < state.spyCount) {
-        const idx = rangeRandom(state.playerCount);
-        if (!arr[idx]) {
-          arr[idx] = true;
-          spiesAssigned++;
-        }
-      }
-      state.roles = arr.map(isSpy => ({ isSpy, word: isSpy ? null : word }));
-    }
-
-    // --- Setup sliders + constraints ---
-    const setupUI = {
-      pc: null, sc: null, rt: null, rd: null,
-      pcV: null, scV: null, rtV: null, rdV: null,
+    // ═══════════════════════════════════════════════════════════════
+    // GAME STATE
+    // ═══════════════════════════════════════════════════════════════
+    let gameState = {
+      language: 'en',
+      playersCount: 4,
+      spyCount: 1,
+      gameDuration: 180,
+      difficulty: 'normal',
+      primaryColor: '#B3E5FC',
+      secondaryColor: '#FFFFFF',
+      currentScreen: 'setup',
+      currentPlayerIndex: 0,
+      spyIndices: [],
+      currentWord: '',
+      votes: [],
+      roleRevealed: false,
+      timerInterval: null,
+      timeRemaining: 180,
+      sfxEnabled: true,
+      hapticsEnabled: true
     };
 
-    function maxSpiesForPlayers(playerCount) {
-      // do not allow spies > citizens
-      return Math.max(1, Math.floor(playerCount / 2));
+    const STORAGE = {
+      prefs: 'shadowops_prefs_v2',
+      used: 'shadowops_used_words_v2'
+    };
+
+    // Global silent flag (used to prevent SFX/haptics during initialization)
+    let silent = false;
+
+    const defaultConfig = { game_title: 'Shadow Ops' };
+    let config = { ...defaultConfig };
+
+    // ═══════════════════════════════════════════════════════════════
+    // ELEMENT SDK INITIALIZATION (unchanged behavior)
+    // ═══════════════════════════════════════════════════════════════
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (newConfig) => {
+          config = { ...defaultConfig, ...newConfig };
+          // No language screen title now, keep for compatibility
+        },
+        mapToCapabilities: (cfg) => ({
+          recolorables: [],
+          borderables: [],
+          fontEditable: undefined,
+          fontSizeable: undefined
+        }),
+        mapToEditPanelValues: (cfg) => new Map([
+          ['game_title', cfg.game_title || defaultConfig.game_title]
+        ])
+      });
     }
 
-    function syncSetupUI() {
-      const pc = parseInt(setupUI.pc.value);
-      const maxSpies = maxSpiesForPlayers(pc);
-      setupUI.sc.max = String(maxSpies);
-      if (parseInt(setupUI.sc.value) > maxSpies) setupUI.sc.value = String(maxSpies);
+    // ═══════════════════════════════════════════════════════════════
+    // FX: SOUND + HAPTICS
+    // ═══════════════════════════════════════════════════════════════
+    let audioCtx = null;
+    let userGestureUnlocked = false;
 
-      setupUI.pcV.textContent = String(pc);
-      setupUI.scV.textContent = String(setupUI.sc.value);
-      setupUI.rtV.textContent = String(setupUI.rt.value) + (state.language === 'fa' ? ' دقیقه' : ' min');
-      setupUI.rdV.textContent = String(setupUI.rd.value);
+    // Unlock audio/haptics after the first real user gesture (Chrome autoplay policy)
+    function unlockGesturesOnce() {
+      userGestureUnlocked = true;
+      ensureAudio(true);
+      // Do NOT auto-play here; keep SFX behavior identical to the old version:
+      // sounds will trigger from the actual button/task handlers.
+      removeUnlockListeners();
     }
 
-    /* Event Handlers */
-    function initEventHandlers() {
-      // unlock audio on first user gesture
-      window.addEventListener('pointerdown', () => SFX.unlock(), { once: true, passive: true });
+    function removeUnlockListeners() {
+      document.removeEventListener('pointerdown', unlockGesturesOnce);
+      document.removeEventListener('touchstart', unlockGesturesOnce);
+      document.removeEventListener('mousedown', unlockGesturesOnce);
+      document.removeEventListener('keydown', unlockGesturesOnce);
+    }
 
-      // global gear button
-      document.getElementById('gear-btn').addEventListener('click', () => {
-        openSettings();
-      });
+    document.addEventListener('pointerdown', unlockGesturesOnce, { passive: true });
+    document.addEventListener('touchstart', unlockGesturesOnce, { passive: true });
+    document.addEventListener('mousedown', unlockGesturesOnce, { passive: true });
+    document.addEventListener('keydown', unlockGesturesOnce, { passive: true });
 
-      // Main menu buttons
-      document.getElementById('continue-btn').addEventListener('click', () => {
-        SFX.click();
-        showPage('setup-page');
-      });
-      document.getElementById('guide-btn').addEventListener('click', () => {
-        SFX.click();
-        showPage('guide-page');
-      });
-      document.getElementById('settings-btn').addEventListener('click', () => {
-        SFX.click();
-        openSettings();
-      });
-      // Back buttons
-      document.getElementById('back-from-guide').addEventListener('click', () => showPage('main-menu'));
-      document.getElementById('back-from-settings').addEventListener('click', () => showPage('main-menu'));
-      // Settings interactions
-      document.getElementById('language-select').addEventListener('change', e => {
-        state.language = e.target.value;
-        updateLanguage();
-        syncSetupUI();
-        saveSettings();
-      });
-      document.getElementById('primary-color').addEventListener('input', e => {
-        state.primary = e.target.value;
-        updateTheme();
-        saveSettings();
-      });
-      document.getElementById('secondary-color').addEventListener('input', e => {
-        state.secondary = e.target.value;
-        updateTheme();
-        saveSettings();
-      });
-      // Toggle controls
-      document.getElementById('sound-toggle').addEventListener('click', e => {
-        state.sound = !state.sound;
-        e.currentTarget.classList.toggle('on', state.sound);
-        SFX.click();
-        saveSettings();
-      });
-      document.getElementById('vibration-toggle').addEventListener('click', e => {
-        state.vibration = !state.vibration;
-        e.currentTarget.classList.toggle('on', state.vibration);
-        SFX.click();
-        saveSettings();
-      });
+    function ensureAudio(force = false) {
+      if (!userGestureUnlocked && !force) return;
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    }
 
-      // Setup sliders
-      setupUI.pc = document.getElementById('player-count');
-      setupUI.sc = document.getElementById('spy-count');
-      setupUI.rt = document.getElementById('round-time');
-      setupUI.rd = document.getElementById('rounds');
-      setupUI.pcV = document.getElementById('player-count-val');
-      setupUI.scV = document.getElementById('spy-count-val');
-      setupUI.rtV = document.getElementById('round-time-val');
-      setupUI.rdV = document.getElementById('rounds-val');
+    function playTone(freq, durMs, type = 'sine', gain = 0.06) {
+      if (!gameState.sfxEnabled) return;
+      ensureAudio();
+      if (!audioCtx) return;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      g.gain.setValueAtTime(gain, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + durMs / 1000);
+      o.start(now);
+      o.stop(now + durMs / 1000);
+    }
 
-      const onSlide = () => { syncSetupUI(); };
-      setupUI.pc.addEventListener('input', onSlide, { passive: true });
-      setupUI.sc.addEventListener('input', onSlide, { passive: true });
-      setupUI.rt.addEventListener('input', onSlide, { passive: true });
-      setupUI.rd.addEventListener('input', onSlide, { passive: true });
-      // Setup form
-      document.getElementById('start-game').addEventListener('click', () => {
-        SFX.click();
-        state.playerCount = parseInt(setupUI.pc.value);
-        state.spyCount = parseInt(setupUI.sc.value);
-        state.roundTime = parseInt(setupUI.rt.value);
-        state.maxRounds = parseInt(setupUI.rd.value);
-        state.difficulty = document.getElementById('difficulty').value;
-        state.currentRound = 1;
-        assignRoles();
-        state.currentPlayerIndex = 0;
-        showPage('role-page');
-        updateRoleView();
-      });
-      // Role reveal card handler
-      document.getElementById('role-card').addEventListener('click', () => {
-        const card = document.getElementById('role-card');
-        if (!card.classList.contains('flipped')) {
-          SFX.flip();
-          card.classList.add('flipped');
-          // Set content based on role
-          const role = state.roles[state.currentPlayerIndex];
-          const back = document.getElementById('role-back');
-          if (role.isSpy) {
-            card.classList.remove('citizen-theme');
-            card.classList.add('spy-theme');
-            back.innerHTML = '<div><div class="role-pill">' + i18n[state.language].youAreSpy + '</div><div style="opacity:.82">' + (state.language === 'fa' ? 'هیچ کلمه‌ای نداری.' : 'You have no word.') + '</div></div>';
-            card.classList.remove('spy-shake');
-            // restart shake
-            void card.offsetWidth;
-            card.classList.add('spy-shake');
-          } else {
-            card.classList.remove('spy-theme');
-            card.classList.add('citizen-theme');
-            back.innerHTML = '<div><div class="role-pill">' + i18n[state.language].yourWord + '</div><div style="font-size:1.65rem; letter-spacing:-0.02em">' + role.word + '</div></div>';
-          }
-          document.getElementById('role-front').textContent = i18n[state.language].tapNext;
-        } else {
-          SFX.click();
-          // Next player or start timer
-          card.classList.remove('flipped');
-          state.currentPlayerIndex++;
-          if (state.currentPlayerIndex >= state.playerCount) {
-            startTimer();
-          } else {
-            updateRoleView();
-          }
+    function playSfx(name) {
+      if (!gameState.sfxEnabled) return;
+      if (!userGestureUnlocked) return;
+      // Distinct, simple signatures
+      switch (name) {
+        case 'tap': playTone(520, 70, 'triangle', 0.05); playTone(780, 60, 'sine', 0.03); break;
+        case 'start': playTone(330, 90, 'sine', 0.05); playTone(660, 120, 'triangle', 0.05); break;
+        case 'reveal': playTone(440, 80, 'sine', 0.05); playTone(880, 140, 'triangle', 0.04); break;
+        case 'confirm': playTone(740, 90, 'triangle', 0.05); break;
+        case 'danger': playTone(160, 140, 'sawtooth', 0.04); break;
+        case 'tick': playTone(1100, 25, 'square', 0.025); break;
+        case 'vote': playTone(600, 60, 'triangle', 0.05); break;
+        case 'win': playTone(523, 90, 'sine', 0.05); playTone(659, 90, 'sine', 0.05); playTone(784, 140, 'triangle', 0.04); break;
+        case 'lose': playTone(220, 140, 'sawtooth', 0.04); playTone(180, 180, 'sine', 0.03); break;
+        default: playTone(500, 60, 'triangle', 0.04);
+      }
+    }
+
+    function vibrate(pattern) {
+      if (!gameState.hapticsEnabled) return;
+      if (!userGestureUnlocked) return;
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    function haptic(name) {
+      // "لرزش های دقیق" بر اساس تسک
+      switch (name) {
+        case 'tap': vibrate(12); break;
+        case 'start': vibrate([18, 20, 28]); break;
+        case 'reveal': vibrate([12, 18, 12, 18, 24]); break;
+        case 'spy': vibrate([30, 20, 30, 20, 60]); break;
+        case 'confirm': vibrate([14, 18, 14]); break;
+        case 'vote': vibrate([10, 14, 10]); break;
+        case 'tick': vibrate(8); break;
+        case 'danger': vibrate([20, 18, 20, 18, 20]); break;
+        case 'win': vibrate([12, 18, 12, 18, 12]); break;
+        case 'lose': vibrate([35, 20, 35]); break;
+        default: vibrate(10);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // LOCAL STORAGE: prefs + used words (never reuse)
+    // ═══════════════════════════════════════════════════════════════
+    function loadPrefs() {
+      try {
+        const raw = localStorage.getItem(STORAGE.prefs);
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        if (p.language) gameState.language = p.language;
+        if (p.playersCount) gameState.playersCount = p.playersCount;
+        if (p.spyCount) gameState.spyCount = p.spyCount;
+        if (p.gameDuration) gameState.gameDuration = p.gameDuration;
+        if (p.difficulty) gameState.difficulty = p.difficulty;
+        if (p.primaryColor) gameState.primaryColor = p.primaryColor;
+        if (p.secondaryColor) gameState.secondaryColor = p.secondaryColor;
+        if (typeof p.sfxEnabled === 'boolean') gameState.sfxEnabled = p.sfxEnabled;
+        if (typeof p.hapticsEnabled === 'boolean') gameState.hapticsEnabled = p.hapticsEnabled;
+      } catch (e) {}
+    }
+
+    function savePrefs() {
+      try {
+        localStorage.setItem(STORAGE.prefs, JSON.stringify({
+          language: gameState.language,
+          playersCount: gameState.playersCount,
+          spyCount: gameState.spyCount,
+          gameDuration: gameState.gameDuration,
+          difficulty: gameState.difficulty,
+          primaryColor: gameState.primaryColor,
+          secondaryColor: gameState.secondaryColor,
+          sfxEnabled: gameState.sfxEnabled,
+          hapticsEnabled: gameState.hapticsEnabled
+        }));
+      } catch (e) {}
+    }
+
+    function loadUsedWords() {
+      try {
+        const raw = localStorage.getItem(STORAGE.used);
+        if (!raw) return { en: {easy:[],normal:[],hard:[],insane:[]}, fa: {easy:[],normal:[],hard:[],insane:[]} };
+        const u = JSON.parse(raw);
+        // Ensure shape
+        for (const lang of ['en','fa']) {
+          u[lang] = u[lang] || {};
+          for (const d of ['easy','normal','hard','insane']) u[lang][d] = u[lang][d] || [];
         }
-      });
-      // Vote button
-      document.getElementById('vote-button').addEventListener('click', () => {
-        SFX.click();
-        showVotePage();
-      });
-      document.getElementById('show-result-btn').addEventListener('click', () => {
-        SFX.click();
-        computeResult();
-      });
-      document.getElementById('back-to-menu').addEventListener('click', () => {
-        SFX.click();
-        showPage('main-menu');
-      });
+        return u;
+      } catch (e) {
+        return { en: {easy:[],normal:[],hard:[],insane:[]}, fa: {easy:[],normal:[],hard:[],insane:[]} };
+      }
+    }
+
+    function saveUsedWords(used) {
+      try { localStorage.setItem(STORAGE.used, JSON.stringify(used)); } catch (e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // UI Helpers
+    // ═══════════════════════════════════════════════════════════════
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      setTimeout(() => document.getElementById(screenId).classList.add('active'), 50);
+      gameState.currentScreen = screenId.replace('Screen','');
     }
 
     function openSettings() {
-      document.getElementById('language-select').value = state.language;
-      document.getElementById('primary-color').value = state.primary;
-      document.getElementById('secondary-color').value = state.secondary;
-      document.getElementById('sound-toggle').classList.toggle('on', state.sound);
-      document.getElementById('vibration-toggle').classList.toggle('on', state.vibration);
-      showPage('settings-page');
+      playSfx('tap');
+      haptic('tap');
+      document.getElementById('settingsBackdrop').classList.add('active');
+      document.getElementById('settingsModal').classList.add('active');
+      syncSettingsUI();
+      renderDifficultyStats();
     }
 
-    function updateRoleView() {
-      const front = document.getElementById('role-front');
-      front.textContent = i18n[state.language].tapReveal;
-      const back = document.getElementById('role-back');
-      back.textContent = '';
-      const card = document.getElementById('role-card');
-      card.classList.remove('spy-theme','citizen-theme','spy-shake');
-      document.getElementById('reveal-title').textContent = i18n[state.language].revealTitle + ' ' + (state.currentPlayerIndex + 1) + '/' + state.playerCount;
+    function closeSettings() {
+      playSfx('tap');
+      haptic('tap');
+      document.getElementById('settingsBackdrop').classList.remove('active');
+      document.getElementById('settingsModal').classList.remove('active');
+      savePrefs();
     }
 
-    /* Timer functions */
-    function startTimer() {
-      showPage('timer-page');
-      const totalSeconds = state.roundTime * 60;
-      let elapsed = 0;
-      let warned30 = false;
-      const ring = document.getElementById('timer-ring');
-      const circumference = 2 * Math.PI * 45;
+    function toggleSfx() {
+      gameState.sfxEnabled = !gameState.sfxEnabled;
+      syncSettingsUI();
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function toggleHaptics() {
+      gameState.hapticsEnabled = !gameState.hapticsEnabled;
+      syncSettingsUI();
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+
+    function resetUsedWords() {
+      const t = TRANSLATIONS[gameState.language];
+      // Require a user gesture anyway; this is called via button click
+      playSfx('tap');
+      haptic('tap');
+
+      const ok = window.confirm(t.resetUsedConfirm);
+      if (!ok) return;
+
+      const empty = { en: {easy:[],normal:[],hard:[],insane:[]}, fa: {easy:[],normal:[],hard:[],insane:[]} };
+      saveUsedWords(empty);
+      showToast(t.resetUsedDone);
+      renderDifficultyStats();
+    }
+
+    function syncSettingsUI() {
+      const t = TRANSLATIONS[gameState.language];
+      document.getElementById('settingsTitle').textContent = t.settings;
+      document.getElementById('settingsLangLabel').textContent = t.language;
+      document.getElementById('settingsSfxLabel').textContent = t.soundEffects;
+      document.getElementById('settingsHapticsLabel').textContent = t.vibration;
+      document.getElementById('settingsStatsLabel').textContent = t.unusedWords;
+      document.getElementById('btnResetUsedWords').textContent = t.resetUsedBtn;
+
+      document.getElementById('toggleSfx').classList.toggle('on', gameState.sfxEnabled);
+      document.getElementById('toggleHaptics').classList.toggle('on', gameState.hapticsEnabled);
+
+      document.getElementById('settingsLangEn').classList.toggle('selected', gameState.language === 'en');
+      document.getElementById('settingsLangFa').classList.toggle('selected', gameState.language === 'fa');
+    }
+
+    function setLanguageFromSettings(lang) {
+      playSfx('tap');
+      haptic('tap');
+      setLanguage(lang);
+      syncSettingsUI();
+      renderDifficultyStats();
+      savePrefs();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // LANGUAGE
+    // ═══════════════════════════════════════════════════════════════
+    function setLanguage(lang) {
+      gameState.language = lang;
+      document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+      document.body.className = lang === 'fa'
+        ? 'h-full bg-gradient font-persian overflow-hidden'
+        : 'h-full bg-gradient font-english overflow-hidden';
+      updateTranslations();
+
+      // If Settings is open, refresh its UI + stats immediately (no need to close/reopen)
+      const modal = document.getElementById('settingsModal');
+      if (modal && modal.classList.contains('active')) {
+        syncSettingsUI();
+        renderDifficultyStats();
+      }
+    }
+
+    function updateTranslations() {
+      const t = TRANSLATIONS[gameState.language];
+
+      document.getElementById('setupTitle').textContent = t.gameSetup;
+      document.getElementById('labelPlayers').textContent = t.players;
+      document.getElementById('labelSpies').textContent = t.spies;
+      document.getElementById('labelDuration').textContent = t.duration;
+      document.getElementById('labelDifficulty').textContent = t.difficulty;
+      document.getElementById('diffEasyText').textContent = t.easy;
+      document.getElementById('diffNormalText').textContent = t.normal;
+      document.getElementById('diffHardText').textContent = t.hard;
+      document.getElementById('diffInsaneText').textContent = t.insane;
+      document.getElementById('labelColors').textContent = t.themeColors;
+      document.getElementById('labelPrimary').textContent = t.primary;
+      document.getElementById('labelSecondary').textContent = t.secondary;
+      document.getElementById('btnStart').textContent = t.startGame;
+      document.getElementById('btnOpenSettings').textContent = t.settingsBtn;
+      document.getElementById('tapText').textContent = t.tapToSee;
+      document.getElementById('btnConfirm').textContent = t.confirmPass;
+      document.getElementById('discussTitle').textContent = t.discussionTime;
+      document.getElementById('btnEndDiscussion').textContent = t.startVoting;
+      document.getElementById('voteTitle').textContent = t.voteForSpy;
+      document.getElementById('voteSubtitle').textContent = t.whoIsSpy;
+      document.getElementById('btnConfirmVote').textContent = t.confirmVotes;
+      document.getElementById('revealSpyLabel').textContent = t.spiesWere;
+      document.getElementById('revealWordLabel').textContent = t.wordWas;
+      document.getElementById('btnPlayAgain').textContent = t.playAgain;
+      document.getElementById('btnNewSetup').textContent = t.newSetup;
+      document.getElementById('spyLimitHint').textContent = t.spiesLimit;
+
+      // Difficulty chip state
+      updateDifficultyUI();
+      renderDifficultyStats();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SETUP CONTROLS
+    // ═══════════════════════════════════════════════════════════════
+    function updatePlayerCount(value) {
+      gameState.playersCount = parseInt(value);
+      document.getElementById('playerCountDisplay').textContent = value;
+      enforceSpyLimit();
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function enforceSpyLimit() {
+      const spySlider = document.getElementById('spySlider');
+      const maxSpies = Math.max(1, gameState.playersCount - 1);
+      spySlider.max = String(maxSpies);
+      if (gameState.spyCount > maxSpies) {
+        gameState.spyCount = maxSpies;
+        spySlider.value = String(maxSpies);
+        document.getElementById('spyCountDisplay').textContent = String(maxSpies);
+      }
+    }
+
+    function updateSpyCount(value) {
+      const v = parseInt(value);
+      const maxSpies = Math.max(1, gameState.playersCount - 1);
+      gameState.spyCount = Math.min(v, maxSpies);
+      document.getElementById('spyCountDisplay').textContent = String(gameState.spyCount);
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function updateDuration(value, silent = false) {
+      gameState.gameDuration = parseInt(value);
+      const mins = Math.floor(value / 60);
+      const secs = value % 60;
+      document.getElementById('durationDisplay').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function updatePrimaryColor(color, silent = false) {
+      gameState.primaryColor = color;
+      document.documentElement.style.setProperty('--primary', color);
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function updateSecondaryColor(color, silent = false) {
+      gameState.secondaryColor = color;
+      document.documentElement.style.setProperty('--secondary', color);
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function toggleDifficultyAccordion() {
+      playSfx('tap');
+      haptic('tap');
+      document.getElementById('difficultyAccordion').classList.toggle('open');
+    }
+
+    function setDifficulty(diff, silent = false) {
+      gameState.difficulty = diff;
+      updateDifficultyUI();
+      if (!silent) {
+        playSfx('tap');
+        haptic('tap');
+      }
+      savePrefs();
+    }
+
+    function updateDifficultyUI() {
+      for (const d of ['easy','normal','hard','insane']) {
+        const btn = document.getElementById(`diff_${d}`);
+        if (btn) btn.classList.toggle('selected', gameState.difficulty === d);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WORD PICKING (never repeats)
+    // ═══════════════════════════════════════════════════════════════
+    function chooseWord() {
+      const used = loadUsedWords();
+      const lang = gameState.language;
+      const diff = gameState.difficulty;
+      const usedSet = new Set(used[lang][diff]);
+      const all = WORD_BANK_BASE[lang][diff];
+      const available = all.filter(w => !usedSet.has(w));
+      if (available.length === 0) {
+        return null;
+      }
+      const word = available[Math.floor(Math.random() * available.length)];
+      used[lang][diff].push(word);
+      saveUsedWords(used);
+      return word;
+    }
+
+    // Count words by counting quote-pairs in JSON string of the array (each word is wrapped in two quotes).
+    // This avoids relying on any pre-defined totals and always reflects the actual bank content for the current language/difficulty.
+
+    
+function renderDifficultyStats() {
+  const used = loadUsedWords();
+  const lang = gameState.language;
+  const t = TRANSLATIONS[lang];
+  const el = document.getElementById('difficultyStats');
+  if (!el) return;
+
+  // Always reflect the *actual* word arrays for the CURRENT language (including any manual edits you make).
+  // We also count UNIQUE words to avoid duplicates inflating totals.
+  const banks = (WORD_BANK_BASE && WORD_BANK_BASE[lang]) ? WORD_BANK_BASE[lang] : {};
+
+  const order = ['easy', 'normal', 'hard', 'insane'];
+  const labelMap = {
+    easy: t.stat_easy,
+    normal: t.stat_normal,
+    hard: t.stat_hard,
+    insane: t.stat_insane
+  };
+
+  el.innerHTML = order.map((diffKey) => {
+    const arr = Array.isArray(banks[diffKey]) ? banks[diffKey] : [];
+    const total = new Set(arr).size;
+    const seen = (used[lang] && used[lang][diffKey]) ? new Set(used[lang][diffKey]).size : 0;
+    const label = labelMap[diffKey] || diffKey;
+    return `<div class="flex items-center justify-between">
+      <span>${label}</span>
+      <span class="text-white/70">${seen}/${total}</span>
+    </div>`;
+  }).join('');
+}
+
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // GAME START
+    // ═══════════════════════════════════════════════════════════════
+    function startGame() {
+      // pick word first; if none, don't start
+      const word = chooseWord();
+      const t = TRANSLATIONS[gameState.language];
+      if (!word) {
+        playSfx('danger');
+        haptic('danger');
+        showToast(t.noWordsLeft);
+        const setup = document.getElementById('setupScreen');
+        setup.classList.add('shake');
+        setTimeout(() => setup.classList.remove('shake'), 520);
+        return;
+      }
+
+      playSfx('start');
+      haptic('start');
+
+      // Reset game
+      gameState.currentPlayerIndex = 0;
+      gameState.votes = new Array(gameState.playersCount).fill(-1);
+      gameState.roleRevealed = false;
+      gameState.currentWord = word;
+
+      // Select spies randomly (unique)
+      const idxs = [];
+      while (idxs.length < gameState.spyCount) {
+        const r = Math.floor(Math.random() * gameState.playersCount);
+        if (!idxs.includes(r)) idxs.push(r);
+      }
+      gameState.spyIndices = idxs;
+
+      setupRoleScreen();
+      showScreen('roleScreen');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ROLE REVEAL
+    // ═══════════════════════════════════════════════════════════════
+    function setupRoleScreen() {
+      const t = TRANSLATIONS[gameState.language];
+      document.getElementById('playerLabel').textContent = `${t.player} ${gameState.currentPlayerIndex + 1}`;
+      document.getElementById('tapPrompt').classList.remove('hidden');
+      document.getElementById('roleRevealed').classList.add('hidden');
+      document.getElementById('btnConfirm').classList.add('hidden');
+
+      const roleCard = document.getElementById('roleCard');
+      roleCard.classList.remove('glow-danger', 'glow-success', 'shake');
+      roleCard.classList.add('breathing');
+
+      gameState.roleRevealed = false;
+    }
+
+    function revealRole() {
+      if (gameState.roleRevealed) return;
+      gameState.roleRevealed = true;
+
+      const t = TRANSLATIONS[gameState.language];
+      const isSpy = gameState.spyIndices.includes(gameState.currentPlayerIndex);
+      const roleCard = document.getElementById('roleCard');
+
+      roleCard.classList.remove('breathing');
+      document.getElementById('tapPrompt').classList.add('hidden');
+      document.getElementById('roleRevealed').classList.remove('hidden');
+
+      const roleIcon = document.getElementById('roleIcon');
+      const roleText = document.getElementById('roleText');
+      const wordText = document.getElementById('wordText');
+
+      playSfx('reveal');
+      haptic(isSpy ? 'spy' : 'reveal');
+
+      if (isSpy) {
+        roleIcon.textContent = '🕵️';
+        roleText.textContent = t.youAreSpy;
+        roleText.style.color = '#FF1744';
+        wordText.textContent = t.hidden;
+        wordText.style.color = '#FF1744';
+        roleCard.classList.add('glow-danger', 'shake');
+        setTimeout(() => roleCard.classList.remove('shake'), 500);
+      } else {
+        roleIcon.textContent = '👤';
+        roleText.textContent = t.youAreNormal;
+        roleText.style.color = gameState.primaryColor;
+        wordText.textContent = gameState.currentWord;
+        wordText.style.color = '#FFFFFF';
+        roleCard.classList.add('glow-success');
+      }
+
+      document.getElementById('roleRevealed').classList.add('spy-reveal');
+
+      setTimeout(() => {
+        document.getElementById('btnConfirm').classList.remove('hidden');
+        document.getElementById('btnConfirm').classList.add('slide-up');
+      }, 400);
+    }
+
+    function confirmRole() {
+      playSfx('confirm');
+      haptic('confirm');
+      gameState.currentPlayerIndex++;
+
+      if (gameState.currentPlayerIndex >= gameState.playersCount) {
+        startDiscussion();
+      } else {
+        setupRoleScreen();
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DISCUSSION TIMER
+    // ═══════════════════════════════════════════════════════════════
+    function startDiscussion() {
+      showScreen('timerScreen');
+      gameState.timeRemaining = gameState.gameDuration;
+      updateTimerDisplay();
+
+      const circumference = 2 * Math.PI * 70;
+      const ring = document.getElementById('timerRing');
       ring.style.strokeDasharray = circumference;
-      ring.style.strokeDashoffset = '0';
-      const updateColor = (secRemaining) => {
-        if (secRemaining <= 10) {
-          ring.style.stroke = 'red';
-        } else if (secRemaining <= 30) {
-          ring.style.stroke = 'orange';
-        } else {
-          ring.style.stroke = state.secondary;
-        }
-      };
-      updateColor(totalSeconds);
-      state.timerInterval = setInterval(() => {
-        elapsed++;
-        const remaining = totalSeconds - elapsed;
-        const offset = circumference * (elapsed / totalSeconds);
+      ring.style.stroke = 'var(--primary)';
+
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+
+      // Give a small haptic cue that timer started
+      haptic('start');
+
+      gameState.timerInterval = setInterval(() => {
+        gameState.timeRemaining--;
+        updateTimerDisplay();
+
+        const progress = gameState.timeRemaining / gameState.gameDuration;
+        const offset = circumference * (1 - progress);
         ring.style.strokeDashoffset = offset;
-        updateColor(remaining);
-        if (!warned30 && remaining <= 30 && remaining > 10) {
-          warned30 = true;
-          SFX.warn();
+
+        // Last 10 seconds: red + tick-tock each second
+        if (gameState.timeRemaining <= 10 && gameState.timeRemaining >= 0) {
+          ring.style.stroke = '#FF1744';
+          playSfx('tick');
+          haptic('tick');
         }
-        if (remaining <= 10 && remaining > 0) {
-          SFX.tick();
-          if (state.vibration && navigator.vibrate) navigator.vibrate(18);
-        }
-        if (remaining <= 0) {
-          clearInterval(state.timerInterval);
-          showVotePage();
+
+        if (gameState.timeRemaining <= 0) {
+          clearInterval(gameState.timerInterval);
+          endDiscussion();
         }
       }, 1000);
-      // show vote button after timer ends; we also allow manual early vote by pressing the button (makes interactive)
+
       setTimeout(() => {
-        document.getElementById('vote-button').classList.add('show');
-      }, 500);
+        document.getElementById('btnEndDiscussion').classList.remove('hidden');
+      }, 5000);
     }
 
-    function showVotePage() {
-      clearInterval(state.timerInterval);
-      document.getElementById('vote-button').classList.remove('show');
-      showPage('vote-page');
-      // Build voting list
-      const list = document.getElementById('vote-list');
-      list.innerHTML = '';
-      state.votes = {};
-      for (let i = 0; i < state.playerCount; i++) {
-        const card = document.createElement('div');
-        card.className = 'vote-card glass';
-        card.textContent = (state.language === 'fa' ? 'بازیکن ' : 'Player ') + (i + 1);
-        card.addEventListener('click', () => {
-          const pid = i;
-          if (state.votes[pid]) {
-            delete state.votes[pid];
-            card.classList.remove('selected');
-          } else {
-            state.votes[pid] = true;
-            card.classList.add('selected');
-          }
-        });
-        list.appendChild(card);
-      }
-      document.getElementById('vote-title').textContent = i18n[state.language].voteInstructions;
+    function updateTimerDisplay() {
+      const mins = Math.floor(gameState.timeRemaining / 60);
+      const secs = gameState.timeRemaining % 60;
+      document.getElementById('timerDisplay').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
-    function computeResult() {
-      const selected = Object.keys(state.votes).map(Number);
-      let spiesCaught = 0;
-      for (const idx of selected) {
-        if (state.roles[idx].isSpy) spiesCaught++;
+    function endDiscussion() {
+      playSfx('confirm');
+      haptic('confirm');
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+      startVoting();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VOTING
+    // ═══════════════════════════════════════════════════════════════
+    function startVoting() {
+      showScreen('votingScreen');
+      gameState.currentPlayerIndex = 0;
+      gameState.votes = new Array(gameState.playersCount).fill(-1);
+
+      const grid = document.getElementById('votingGrid');
+      grid.innerHTML = '';
+
+      const t = TRANSLATIONS[gameState.language];
+
+      for (let i = 0; i < gameState.playersCount; i++) {
+        const card = document.createElement('button');
+        card.className = 'glass-card rounded-2xl p-6 cursor-pointer scale-in transition-all duration-300 hover:scale-105';
+        card.style.animationDelay = `${i * 0.1}s`;
+        card.innerHTML = `
+          <div class="text-4xl mb-2">👤</div>
+          <div class="text-lg font-semibold text-white">${t.player} ${i + 1}</div>
+          <div class="text-sm text-white/50 mt-1 vote-count" id="votes-${i}">0 votes</div>
+        `;
+        card.onclick = () => castVote(i);
+        card.id = `player-card-${i}`;
+        grid.appendChild(card);
       }
-      let resultMsg;
-      if (spiesCaught >= state.spyCount) {
-        resultMsg = i18n[state.language].citizensWin;
-      } else if (spiesCaught >= state.spyCount / 2) {
-        resultMsg = i18n[state.language].draw;
+
+      document.getElementById('btnConfirmVote').classList.add('hidden');
+      updateVotingUI();
+    }
+
+    function castVote(playerIndex) {
+      playSfx('vote');
+      haptic('vote');
+
+      gameState.votes[gameState.currentPlayerIndex] = playerIndex;
+      gameState.currentPlayerIndex++;
+
+      updateVotingUI();
+
+      if (gameState.currentPlayerIndex >= gameState.playersCount) {
+        document.getElementById('btnConfirmVote').classList.remove('hidden');
+        document.getElementById('btnConfirmVote').classList.add('slide-up');
+      }
+    }
+
+    function updateVotingUI() {
+      const voteCounts = new Array(gameState.playersCount).fill(0);
+      gameState.votes.forEach(v => { if (v >= 0) voteCounts[v]++; });
+
+      for (let i = 0; i < gameState.playersCount; i++) {
+        const voteEl = document.getElementById(`votes-${i}`);
+        if (voteEl) voteEl.textContent = `${voteCounts[i]} votes`;
+
+        const card = document.getElementById(`player-card-${i}`);
+        if (card) {
+          if (voteCounts[i] > 0) card.classList.add('voted');
+          else card.classList.remove('voted');
+        }
+      }
+
+      const t = TRANSLATIONS[gameState.language];
+      document.getElementById('voteSubtitle').textContent =
+        gameState.currentPlayerIndex < gameState.playersCount
+          ? `${t.player} ${gameState.currentPlayerIndex + 1} - ${t.whoIsSpy}`
+          : t.selectAll;
+    }
+
+    function confirmVotes() {
+      playSfx('confirm');
+      haptic('confirm');
+
+      const voteCounts = new Array(gameState.playersCount).fill(0);
+      gameState.votes.forEach(v => { if (v >= 0) voteCounts[v]++; });
+
+      let maxVotes = -1;
+      let mostVoted = -1;
+      voteCounts.forEach((count, idx) => {
+        if (count > maxVotes) { maxVotes = count; mostVoted = idx; }
+      });
+
+      const playersWon = gameState.spyIndices.includes(mostVoted);
+      showResult(playersWon);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESULT SCREEN
+    // ═══════════════════════════════════════════════════════════════
+    function showResult(playersWon) {
+      showScreen('resultScreen');
+
+      const t = TRANSLATIONS[gameState.language];
+      const resultCard = document.getElementById('resultCard');
+      const resultIcon = document.getElementById('resultIcon');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultMessage = document.getElementById('resultMessage');
+
+      if (playersWon) {
+        playSfx('win');
+        haptic('win');
+        resultIcon.textContent = '🎉';
+        resultTitle.textContent = t.playersFound;
+        resultTitle.style.color = '#00E676';
+        resultMessage.textContent = '';
+        resultCard.classList.add('glow-success');
+        resultCard.classList.remove('glow-danger');
       } else {
-        resultMsg = i18n[state.language].spiesWin;
+        playSfx('lose');
+        haptic('lose');
+        resultIcon.textContent = '🕵️';
+        resultTitle.textContent = t.spyWins;
+        resultTitle.style.color = '#FF1744';
+        resultMessage.textContent = '';
+        resultCard.classList.add('glow-danger');
+        resultCard.classList.remove('glow-success');
       }
-      document.getElementById('result-message').textContent = resultMsg;
-      showPage('result-page');
+
+      const spiesText = gameState.spyIndices
+        .map(i => `${t.player} ${i + 1}`)
+        .join(gameState.language === 'fa' ? '، ' : ', ');
+
+      document.getElementById('revealSpy').textContent = spiesText;
+      document.getElementById('revealWord').textContent = gameState.currentWord;
     }
 
-    /* Init function */
-    function init() {
-      updateTheme();
-      updateLanguage();
-      // init slider UI defaults + constraint
-      setupUI.pc = document.getElementById('player-count');
-      setupUI.sc = document.getElementById('spy-count');
-      setupUI.rt = document.getElementById('round-time');
-      setupUI.rd = document.getElementById('rounds');
-      setupUI.pcV = document.getElementById('player-count-val');
-      setupUI.scV = document.getElementById('spy-count-val');
-      setupUI.rtV = document.getElementById('round-time-val');
-      setupUI.rdV = document.getElementById('rounds-val');
-      syncSetupUI();
-      initEventHandlers();
+    function playAgain() {
+      playSfx('start');
+      haptic('start');
+      startGame();
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    function newSetup() {
+      playSfx('tap');
+      haptic('tap');
+      showScreen('setupScreen');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PARTICLES SYSTEM (unchanged)
+    // ═══════════════════════════════════════════════════════════════
+    function createParticles() {
+      const container = document.getElementById('particles');
+      container.innerHTML = '';
+      for (let i = 0; i < 30; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.top = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 8 + 's';
+        particle.style.opacity = 0.2 + Math.random() * 0.3;
+        particle.style.width = (3 + Math.random() * 4) + 'px';
+        particle.style.height = particle.style.width;
+        container.appendChild(particle);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════
+    // expandWordBank(); // disabled: do not mutate the curated banks; counts reflect the literal arrays
+    createParticles();
+
+    // Load prefs before applying UI
+    loadPrefs();
+
+    // Apply saved theme/colors
+    document.documentElement.style.setProperty('--primary', gameState.primaryColor);
+    document.documentElement.style.setProperty('--secondary', gameState.secondaryColor);
+
+    // Apply saved inputs
+    document.getElementById('playerSlider').value = String(gameState.playersCount);
+    document.getElementById('playerCountDisplay').textContent = String(gameState.playersCount);
+
+    document.getElementById('durationSlider').value = String(gameState.gameDuration);
+    updateDuration(gameState.gameDuration, true);
+
+    document.getElementById('primaryColor').value = gameState.primaryColor;
+    document.getElementById('secondaryColor').value = gameState.secondaryColor;
+
+    enforceSpyLimit();
+    document.getElementById('spySlider').value = String(gameState.spyCount);
+    document.getElementById('spyCountDisplay').textContent = String(gameState.spyCount);
+
+    // Language and texts
+    setLanguage(gameState.language);
+
+    // Ripple + global sound for buttons (only for glass-button)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.glass-button');
+      if (btn) {
+        // ripple
+        const rect = btn.getBoundingClientRect();
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        ripple.style.left = (e.clientX - rect.left) + 'px';
+        ripple.style.top = (e.clientY - rect.top) + 'px';
+        btn.style.position = 'relative';
+        btn.style.overflow = 'hidden';
+        btn.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+      }
+    });
+
+    // Pre-sync settings toggles
+    syncSettingsUI();
+    renderDifficultyStats();
   </script>
 </body>
 </html>
